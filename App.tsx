@@ -109,6 +109,23 @@ function App() {
     }
   }, [goalCompletions]);
 
+  const handleReplyWithTask = useCallback((reminderId: string, taskDescription: string) => {
+    // Create new task
+    const newTask: Task = {
+      id: `t${Date.now()}`,
+      description: taskDescription,
+      timestamp: new Date(),
+    };
+    setTasks(prevTasks => [...prevTasks, newTask].sort((a, b) => a.timestamp.getTime() - b.timestamp.getTime()));
+
+    // Update reminder with linkedTaskId
+    setReminders(prevReminders =>
+      prevReminders.map(r =>
+        r.id === reminderId ? { ...r, linkedTaskId: newTask.id, status: 'done' as const } : r
+      )
+    );
+  }, []);
+
   if (!userRole) {
     return <LoginScreen onLogin={handleLogin} />;
   }
@@ -130,6 +147,7 @@ function App() {
         onAddGoal={handleAddGoal}
         onToggleGoalCompletion={handleToggleGoalCompletion}
         onDeleteGoal={handleDeleteGoal}
+        onReplyWithTask={handleReplyWithTask}
       />
       <GeminiChatBot />
     </div>

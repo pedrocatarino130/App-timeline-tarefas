@@ -17,6 +17,7 @@ export interface Reminder {
   audioUrl?: string; // Used for audio blob URL
   timestamp: Date;
   status: ReminderStatus;
+  linkedTaskId?: string; // Optional link to a timeline task
 }
 
 export interface GeminiMessage {
