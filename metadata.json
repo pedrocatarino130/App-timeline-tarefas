@@ -1,0 +1,7 @@
+{
+  "name": "Timeline Pet Hotel",
+  "description": "A web application for a home-based pet hotel to track daily tasks and communicate between an on-site executor and a remote supervisor. It features a real-time timeline, a chat for reminders with text and audio messages, and an integrated Gemini-powered chatbot for assistance.",
+  "requestFramePermissions": [
+    "microphone"
+  ]
+}
