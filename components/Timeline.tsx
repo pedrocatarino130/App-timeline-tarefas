@@ -1,8 +1,8 @@
 import React, { useState, useMemo } from 'react';
-import { Task, UserRole, Goal, GoalCompletion, GoalType } from '../types';
+import { Task, UserRole, Goal, GoalCompletion, GoalType, Reminder } from '../types';
 import TaskForm from './TaskForm';
 import GoalForm from './GoalForm';
-import { PlusIcon, CheckCircleIcon, CircleIcon, TargetIcon, TrashIcon, CloseIcon } from './Icons';
+import { PlusIcon, CheckCircleIcon, CircleIcon, TargetIcon, TrashIcon, CloseIcon, CommentIcon } from './Icons';
 
 interface TimelineProps {
   userRole: UserRole;
@@ -14,12 +14,15 @@ interface TimelineProps {
   onAddGoal: (description: string, type: GoalType) => void;
   onToggleGoalCompletion: (goalId: string) => void;
   onDeleteGoal: (goalId: string) => void;
+  onSendReminder: (reminder: Omit<Reminder, 'id' | 'timestamp' | 'status'>) => void;
 }
 
-const Timeline: React.FC<TimelineProps> = ({ userRole, tasks, goals, goalCompletions, onAddTask, onDeleteTask, onAddGoal, onToggleGoalCompletion, onDeleteGoal }) => {
+const Timeline: React.FC<TimelineProps> = ({ userRole, tasks, goals, goalCompletions, onAddTask, onDeleteTask, onAddGoal, onToggleGoalCompletion, onDeleteGoal, onSendReminder }) => {
   const [showTaskForm, setShowTaskForm] = useState(false);
   const [showGoalForm, setShowGoalForm] = useState(false);
   const [viewingMedia, setViewingMedia] = useState<{ url: string, type: 'image' | 'video' } | null>(null);
+  const [commentingTask, setCommentingTask] = useState<string | null>(null);
+  const [commentText, setCommentText] = useState('');
   const sortedTasks = [...tasks].sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime());
 
   const handleAddTask = (description: string, mediaUrl?: string, mediaType?: 'image' | 'video') => {
@@ -41,6 +44,19 @@ const Timeline: React.FC<TimelineProps> = ({ userRole, tasks, goals, goalComplet
   const handleDeleteGoalWithConfirmation = (goal: Goal) => {
     if (window.confirm(`Tem certeza que deseja remover a meta "${goal.description}"?`)) {
         onDeleteGoal(goal.id);
+    }
+  };
+
+  const handleAddComment = (taskId: string) => {
+    const task = tasks.find(t => t.id === taskId);
+    if (task && commentText.trim()) {
+      onSendReminder({
+        type: 'text',
+        content: commentText.trim(),
+        linkedTaskId: taskId,
+      });
+      setCommentText('');
+      setCommentingTask(null);
     }
   };
 
@@ -140,6 +156,45 @@ const Timeline: React.FC<TimelineProps> = ({ userRole, tasks, goals, goalComplet
                                     />
                                 )}
                               </div>
+                            )}
+
+                            {commentingTask === task.id && userRole === 'Supervisor' && (
+                              <div className="mt-3 pt-3 border-t border-gray-200 dark:border-gray-700">
+                                <textarea
+                                  value={commentText}
+                                  onChange={(e) => setCommentText(e.target.value)}
+                                  placeholder="Adicione um comentário..."
+                                  className="w-full p-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                  rows={3}
+                                />
+                                <div className="flex gap-2 mt-2">
+                                  <button
+                                    onClick={() => handleAddComment(task.id)}
+                                    className="px-3 py-1 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+                                  >
+                                    Enviar para Chat
+                                  </button>
+                                  <button
+                                    onClick={() => {
+                                      setCommentingTask(null);
+                                      setCommentText('');
+                                    }}
+                                    className="px-3 py-1 text-sm bg-gray-300 dark:bg-gray-600 text-gray-700 dark:text-gray-200 rounded-lg hover:bg-gray-400 dark:hover:bg-gray-500"
+                                  >
+                                    Cancelar
+                                  </button>
+                                </div>
+                              </div>
+                            )}
+
+                            {userRole === 'Supervisor' && commentingTask !== task.id && (
+                              <button
+                                onClick={() => setCommentingTask(task.id)}
+                                className="mt-2 flex items-center gap-1 px-2 py-1 text-xs text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded transition-colors"
+                              >
+                                <CommentIcon className="w-4 h-4" />
+                                Comentar no Chat
+                              </button>
                             )}
                         </div>
                         {userRole === 'Executor' && (

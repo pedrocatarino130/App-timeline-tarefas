@@ -19,6 +19,7 @@ interface MainLayoutProps {
   onAddGoal: (description: string, type: GoalType) => void;
   onToggleGoalCompletion: (goalId: string) => void;
   onDeleteGoal: (goalId: string) => void;
+  onReplyWithTask: (reminderId: string, taskDescription: string) => void;
   onLogout: () => void;
 }
 
@@ -40,9 +41,19 @@ const MainLayout: React.FC<MainLayoutProps> = (props) => {
             onAddGoal={props.onAddGoal}
             onToggleGoalCompletion={props.onToggleGoalCompletion}
             onDeleteGoal={props.onDeleteGoal}
+            onSendReminder={props.onSendReminder}
           />
         ) : (
-          <Chat {...props} />
+          <Chat
+            userRole={props.userRole}
+            reminders={props.reminders}
+            tasks={props.tasks}
+            onSendReminder={props.onSendReminder}
+            onToggleReminderStatus={props.onToggleReminderStatus}
+            onDeleteReminder={props.onDeleteReminder}
+            onAddTask={props.onAddTask}
+            onReplyWithTask={props.onReplyWithTask}
+          />
         )}
       </main>
       <nav className="fixed bottom-0 left-0 right-0 max-w-4xl mx-auto bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700">
