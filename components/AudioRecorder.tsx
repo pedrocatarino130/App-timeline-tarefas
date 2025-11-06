@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { MicIcon } from './Icons';
+import { useAudioPermission } from '../hooks/useAudioPermission';
 
 interface AudioRecorderProps {
   onSendAudio: (audioUrl: string, audioBlob: Blob) => void;
@@ -16,8 +17,10 @@ const AudioRecorder: React.FC<AudioRecorderProps> = ({ onSendAudio }) => {
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
   const timerRef = useRef<NodeJS.Timeout | null>(null);
-  const streamRef = useRef<MediaStream | null>(null);
   const startPositionRef = useRef<{ x: number; y: number } | null>(null);
+
+  // Hook para gerenciar permissões de áudio
+  const { getAudioStream, hasPermission, error: permissionError } = useAudioPermission();
 
   // Limpar timer ao desmontar
   useEffect(() => {
@@ -25,9 +28,8 @@ const AudioRecorder: React.FC<AudioRecorderProps> = ({ onSendAudio }) => {
       if (timerRef.current) {
         clearInterval(timerRef.current);
       }
-      if (streamRef.current) {
-        streamRef.current.getTracks().forEach(track => track.stop());
-      }
+      // O stream agora é gerenciado pelo hook useAudioPermission
+      // Não precisamos limpar aqui
     };
   }, []);
 
@@ -39,8 +41,8 @@ const AudioRecorder: React.FC<AudioRecorderProps> = ({ onSendAudio }) => {
 
   const startRecording = async () => {
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      streamRef.current = stream;
+      // Usar o hook para obter o stream (reutiliza permissão existente)
+      const stream = await getAudioStream();
 
       // Determinar o melhor tipo MIME suportado
       let mimeType = 'audio/webm';
@@ -70,11 +72,8 @@ const AudioRecorder: React.FC<AudioRecorderProps> = ({ onSendAudio }) => {
           onSendAudio(url, blob);
         }
 
-        // Limpar stream
-        if (streamRef.current) {
-          streamRef.current.getTracks().forEach(track => track.stop());
-          streamRef.current = null;
-        }
+        // NÃO limpar o stream aqui - ele é reutilizado para futuras gravações
+        // O hook useAudioPermission gerencia o ciclo de vida do stream
 
         // Resetar estados
         setIsLocked(false);
@@ -292,30 +291,52 @@ const AudioRecorder: React.FC<AudioRecorderProps> = ({ onSendAudio }) => {
         </div>
       )}
 
-      <button
-        onMouseDown={handleMouseDown}
-        onMouseUp={handleMouseUp}
-        onMouseMove={handleMouseMove}
-        onMouseLeave={handleMouseLeave}
-        onTouchStart={handleTouchStart}
-        onTouchEnd={handleTouchEnd}
-        onTouchMove={handleTouchMove}
-        className={`p-3 rounded-full text-white transition-all select-none ${
-          isRecording
-            ? 'bg-red-600 scale-110 shadow-lg'
-            : 'bg-blue-600 hover:bg-blue-700 active:scale-95'
-        }`}
-        title="Segure para gravar áudio"
-        style={{
-          transform: isRecording && !isLocked ? `translateX(${slideOffset}px) translateY(${verticalOffset}px)` : undefined
-        }}
-      >
-        <MicIcon className="w-6 h-6" />
-      </button>
+      <div className="relative">
+        <button
+          onMouseDown={handleMouseDown}
+          onMouseUp={handleMouseUp}
+          onMouseMove={handleMouseMove}
+          onMouseLeave={handleMouseLeave}
+          onTouchStart={handleTouchStart}
+          onTouchEnd={handleTouchEnd}
+          onTouchMove={handleTouchMove}
+          className={`p-3 rounded-full text-white transition-all select-none ${
+            isRecording
+              ? 'bg-red-600 scale-110 shadow-lg'
+              : 'bg-blue-600 hover:bg-blue-700 active:scale-95'
+          }`}
+          title={hasPermission ? "Segure para gravar áudio (Permissão concedida)" : "Segure para gravar áudio"}
+          style={{
+            transform: isRecording && !isLocked ? `translateX(${slideOffset}px) translateY(${verticalOffset}px)` : undefined
+          }}
+        >
+          <MicIcon className="w-6 h-6" />
+        </button>
 
-      {!isRecording && (
+        {/* Indicador de permissão concedida */}
+        {hasPermission && !isRecording && (
+          <div
+            className="absolute -top-1 -right-1 w-3 h-3 bg-green-500 rounded-full border-2 border-white dark:border-gray-800"
+            title="Microfone pronto - Permissão concedida"
+          />
+        )}
+      </div>
+
+      {!isRecording && !hasPermission && (
         <span className="text-xs text-gray-500 hidden sm:inline">
           Segure para gravar
+        </span>
+      )}
+
+      {!isRecording && hasPermission && (
+        <span className="text-xs text-green-600 dark:text-green-400 hidden sm:inline">
+          Microfone pronto
+        </span>
+      )}
+
+      {permissionError && (
+        <span className="text-xs text-red-600 dark:text-red-400">
+          Erro: {permissionError}
         </span>
       )}
     </div>
