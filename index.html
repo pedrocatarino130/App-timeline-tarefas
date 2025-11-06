@@ -138,6 +138,58 @@
         min-height: -webkit-fill-available;
       }
     }
+
+    /* Animações para AudioRecorder */
+    @keyframes fadeIn {
+      from {
+        opacity: 0;
+      }
+      to {
+        opacity: 1;
+      }
+    }
+
+    @keyframes soundWave {
+      0%, 100% {
+        transform: scaleY(0.3);
+      }
+      50% {
+        transform: scaleY(1);
+      }
+    }
+
+    @keyframes bounce {
+      0%, 100% {
+        transform: translateY(0);
+      }
+      50% {
+        transform: translateY(-10px);
+      }
+    }
+
+    .animate-fade-in {
+      animation: fadeIn 0.2s ease-out;
+    }
+
+    .animate-sound-wave {
+      animation: soundWave 0.5s ease-in-out infinite;
+    }
+
+    .animate-bounce {
+      animation: bounce 1s ease-in-out infinite;
+    }
+
+    /* Transições suaves */
+    * {
+      transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
+    /* Melhorar touch response */
+    button {
+      touch-action: manipulation;
+      -webkit-user-select: none;
+      user-select: none;
+    }
   </style>
 
   <script>
