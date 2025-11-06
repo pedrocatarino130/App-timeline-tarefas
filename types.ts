@@ -39,3 +39,13 @@ export interface GoalCompletion {
   date: string; // YYYY-MM-DD
   completed: boolean;
 }
+
+export interface Comment {
+  id: string;
+  taskId: string; // Task that this comment belongs to
+  author: UserRole;
+  type: 'text' | 'audio';
+  content: string; // Text content or audio description
+  audioUrl?: string; // URL for audio blob
+  timestamp: Date;
+}
