@@ -132,6 +132,7 @@ function App() {
 
   // Salva no localStorage e Firebase com debounce
   useEffect(() => {
+    // Não salva se ainda não terminou de carregar
     if (!isLoaded) return;
 
     // IMPORTANTE: Previne loop infinito - não salva se estamos recebendo do Firebase
@@ -176,7 +177,7 @@ function App() {
         clearTimeout(syncTimeoutRef.current);
       }
     };
-  }, [tasks, reminders, goals, goalCompletions, isLoaded]);
+  }, [tasks, reminders, goals, goalCompletions]); // Removido isLoaded das dependências!
 
   const handleLogin = (role: UserRole) => {
     setUserRole(role);
