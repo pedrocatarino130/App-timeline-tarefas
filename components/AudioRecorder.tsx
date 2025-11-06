@@ -16,7 +16,20 @@ const AudioRecorder: React.FC<AudioRecorderProps> = ({ onSendAudio }) => {
   const startRecording = async () => {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      mediaRecorderRef.current = new MediaRecorder(stream);
+
+      // Determinar o melhor tipo MIME suportado
+      let mimeType = 'audio/webm';
+      if (MediaRecorder.isTypeSupported('audio/webm;codecs=opus')) {
+        mimeType = 'audio/webm;codecs=opus';
+      } else if (MediaRecorder.isTypeSupported('audio/mp4')) {
+        mimeType = 'audio/mp4';
+      } else if (MediaRecorder.isTypeSupported('audio/aac')) {
+        mimeType = 'audio/aac';
+      } else if (MediaRecorder.isTypeSupported('audio/mpeg')) {
+        mimeType = 'audio/mpeg';
+      }
+
+      mediaRecorderRef.current = new MediaRecorder(stream, { mimeType });
       audioChunksRef.current = [];
 
       mediaRecorderRef.current.ondataavailable = event => {
@@ -24,7 +37,8 @@ const AudioRecorder: React.FC<AudioRecorderProps> = ({ onSendAudio }) => {
       };
 
       mediaRecorderRef.current.onstop = () => {
-        const blob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
+        // Usar o mimeType do MediaRecorder ao invés de forçar webm
+        const blob = new Blob(audioChunksRef.current, { type: mediaRecorderRef.current?.mimeType || mimeType });
         const url = URL.createObjectURL(blob);
         setAudioUrl(url);
         setAudioBlob(blob);
