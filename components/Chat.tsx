@@ -143,8 +143,9 @@ const ReminderItem: React.FC<ReminderItemProps> = ({ reminder, userRole, tasks, 
         {userRole === 'Supervisor' && (
             <button
                 onClick={handleDelete}
-                className="absolute top-2 right-2 p-1.5 sm:p-2 text-gray-400 hover:text-red-500 rounded-full opacity-0 group-hover:opacity-100 transition-all active:scale-90"
+                className="absolute -top-1 -right-1 p-2 sm:p-2.5 text-white bg-red-500 hover:bg-red-600 rounded-full shadow-md opacity-80 group-hover:opacity-100 transition-all active:scale-90 z-10"
                 aria-label="Apagar Lembrete"
+                style={{ minWidth: '36px', minHeight: '36px' }} // Área mínima de toque para iOS
             >
                 <TrashIcon className="w-4 h-4 sm:w-5 sm:h-5" />
             </button>
