@@ -29,7 +29,7 @@ const MainLayout: React.FC<MainLayoutProps> = (props) => {
   return (
     <div className="max-w-4xl mx-auto flex flex-col h-screen">
       <Header userRole={props.userRole} onLogout={props.onLogout} />
-      <main className="flex-grow overflow-y-auto p-4 md:p-6 pb-24">
+      <main className="flex-grow overflow-y-auto p-4 md:p-6 pb-32 sm:pb-28">
         {activeTab === 'Timeline' ? (
           <Timeline
             userRole={props.userRole}
@@ -56,7 +56,7 @@ const MainLayout: React.FC<MainLayoutProps> = (props) => {
           />
         )}
       </main>
-      <nav className="fixed bottom-0 left-0 right-0 max-w-4xl mx-auto bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700">
+      <nav className="fixed bottom-0 left-0 right-0 max-w-4xl mx-auto bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700 shadow-lg safe-area-bottom">
         <div className="flex justify-around">
           <TabButton
             label="Timeline"
@@ -90,10 +90,10 @@ const TabButton: React.FC<TabButtonProps> = ({ label, icon, isActive, onClick })
   return (
     <button
       onClick={onClick}
-      className={`flex-1 flex flex-col items-center justify-center p-3 transition-colors duration-200 ${isActive ? activeClasses : inactiveClasses}`}
+      className={`flex-1 flex flex-col items-center justify-center py-3 px-2 sm:p-4 transition-colors duration-200 ${isActive ? activeClasses : inactiveClasses}`}
     >
-      <div className="w-6 h-6">{icon}</div>
-      <span className="text-xs font-medium mt-1">{label}</span>
+      <div className="w-6 h-6 sm:w-7 sm:h-7">{icon}</div>
+      <span className="text-xs sm:text-sm font-medium mt-1">{label}</span>
     </button>
   );
 };

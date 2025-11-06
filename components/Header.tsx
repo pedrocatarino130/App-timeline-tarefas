@@ -16,7 +16,7 @@ const Header: React.FC<HeaderProps> = ({ userRole, onLogout }) => {
       <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between h-16">
           <div className="flex items-center">
-            <h1 className="text-xl font-bold text-gray-900 dark:text-white">Pet Hotel</h1>
+            <h1 className="text-xl font-bold text-gray-900 dark:text-white">CASA SATOS</h1>
             <span className={`ml-4 px-3 py-1 text-sm font-semibold rounded-full ${roleColor}`}>
               {userRole}
             </span>
