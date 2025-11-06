@@ -15,21 +15,11 @@ export const STORAGE_KEYS = {
   REMINDERS: 'pet_hotel_reminders',
   GOALS: 'pet_hotel_goals',
   GOAL_COMPLETIONS: 'pet_hotel_goal_completions',
-  USER_ID: 'pet_hotel_user_id',
 } as const;
 
-// Gera um ID único para o usuário (compartilhado entre dispositivos)
-export const getUserId = (): string => {
-  let userId = localStorage.getItem(STORAGE_KEYS.USER_ID);
-
-  if (!userId) {
-    // Gera um ID único baseado em timestamp e random
-    userId = `user_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-    localStorage.setItem(STORAGE_KEYS.USER_ID, userId);
-  }
-
-  return userId;
-};
+// ID do workspace compartilhado - TODOS os usuários usam o mesmo workspace
+// Isso permite que Pedro e Sato vejam e compartilhem os mesmos dados
+export const WORKSPACE_ID = 'casa_satos';
 
 // Interface para os dados do usuário
 export interface UserData {
@@ -86,9 +76,8 @@ export const saveToLocalStorage = <T>(key: string, data: T): void => {
   }
 };
 
-// Salva todos os dados no Firebase
+// Salva todos os dados no Firebase (workspace compartilhado)
 export const saveToFirebase = async (
-  userId: string,
   data: UserData
 ): Promise<boolean> => {
   if (!db) {
@@ -97,8 +86,8 @@ export const saveToFirebase = async (
   }
 
   try {
-    const userDocRef = doc(db, 'users', userId);
-    await setDoc(userDocRef, {
+    const workspaceDocRef = doc(db, 'workspaces', WORKSPACE_ID);
+    await setDoc(workspaceDocRef, {
       ...data,
       lastUpdated: Date.now(),
     });
@@ -111,18 +100,16 @@ export const saveToFirebase = async (
   }
 };
 
-// Carrega dados do Firebase
-export const loadFromFirebase = async (
-  userId: string
-): Promise<UserData | null> => {
+// Carrega dados do Firebase (workspace compartilhado)
+export const loadFromFirebase = async (): Promise<UserData | null> => {
   if (!db) {
     console.warn('Firebase não está configurado. Usando apenas localStorage.');
     return null;
   }
 
   try {
-    const userDocRef = doc(db, 'users', userId);
-    const docSnap = await getDoc(userDocRef);
+    const workspaceDocRef = doc(db, 'workspaces', WORKSPACE_ID);
+    const docSnap = await getDoc(workspaceDocRef);
 
     if (docSnap.exists()) {
       const data = docSnap.data() as UserData;
@@ -153,9 +140,8 @@ export const loadFromFirebase = async (
   }
 };
 
-// Sincroniza dados em tempo real
+// Sincroniza dados em tempo real (workspace compartilhado)
 export const syncWithFirebase = (
-  userId: string,
   onDataChange: (data: UserData) => void
 ): Unsubscribe | null => {
   if (!db) {
@@ -164,9 +150,9 @@ export const syncWithFirebase = (
   }
 
   try {
-    const userDocRef = doc(db, 'users', userId);
+    const workspaceDocRef = doc(db, 'workspaces', WORKSPACE_ID);
 
-    const unsubscribe = onSnapshot(userDocRef, (doc) => {
+    const unsubscribe = onSnapshot(workspaceDocRef, (doc) => {
       if (doc.exists()) {
         const data = doc.data() as UserData;
 

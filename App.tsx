@@ -6,7 +6,6 @@ import {
   STORAGE_KEYS,
   loadFromLocalStorage,
   saveToLocalStorage,
-  getUserId,
   saveToFirebase,
   loadFromFirebase,
   syncWithFirebase,
@@ -44,18 +43,17 @@ function App() {
 
   const [isSyncing, setIsSyncing] = useState(false);
   const [isLoaded, setIsLoaded] = useState(false);
-  const userId = useRef(getUserId());
   const lastSyncTime = useRef(0);
   const syncTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
-  // Carrega dados do Firebase ao iniciar
+  // Carrega dados do Firebase ao iniciar (workspace compartilhado)
   useEffect(() => {
     const loadData = async () => {
-      console.log('🔄 Carregando dados do Firebase...');
-      const firebaseData = await loadFromFirebase(userId.current);
+      console.log('🔄 Carregando dados do workspace compartilhado...');
+      const firebaseData = await loadFromFirebase();
 
       if (firebaseData) {
-        console.log('✅ Dados carregados do Firebase!');
+        console.log('✅ Dados carregados do Firebase (workspace compartilhado)!');
         setTasks(firebaseData.tasks);
         setReminders(firebaseData.reminders);
         setGoals(firebaseData.goals);
@@ -70,15 +68,15 @@ function App() {
     loadData();
   }, []);
 
-  // Sincronização em tempo real
+  // Sincronização em tempo real (workspace compartilhado)
   useEffect(() => {
     if (!isLoaded) return;
 
-    console.log('🔄 Configurando sincronização em tempo real...');
-    const unsubscribe = syncWithFirebase(userId.current, (data) => {
+    console.log('🔄 Configurando sincronização em tempo real do workspace...');
+    const unsubscribe = syncWithFirebase((data) => {
       // Apenas atualiza se os dados vieram de outro dispositivo
       if (data.lastUpdated && data.lastUpdated > lastSyncTime.current) {
-        console.log('📥 Dados atualizados de outro dispositivo!');
+        console.log('📥 Dados atualizados de outro usuário/dispositivo!');
         setTasks(data.tasks);
         setReminders(data.reminders);
         setGoals(data.goals);
@@ -120,7 +118,7 @@ function App() {
         lastUpdated: Date.now(),
       };
 
-      const success = await saveToFirebase(userId.current, userData);
+      const success = await saveToFirebase(userData);
       if (success) {
         lastSyncTime.current = Date.now();
       }
@@ -150,9 +148,10 @@ function App() {
       timestamp: new Date(),
       mediaUrl,
       mediaType,
+      author: userRole || undefined, // Adiciona quem criou a tarefa
     };
     setTasks(prevTasks => [...prevTasks, newTask].sort((a, b) => a.timestamp.getTime() - b.timestamp.getTime()));
-  }, []);
+  }, [userRole]);
 
   const handleDeleteTask = useCallback((taskId: string) => {
     setTasks(prevTasks => prevTasks.filter(task => task.id !== taskId));
@@ -164,9 +163,10 @@ function App() {
       id: `r${Date.now()}`,
       timestamp: new Date(),
       status: 'pending',
+      author: userRole || undefined, // Adiciona quem criou o lembrete
     };
     setReminders(prevReminders => [...prevReminders, newReminder]);
-  }, []);
+  }, [userRole]);
 
   const handleDeleteReminder = useCallback((reminderId: string) => {
     setReminders(prevReminders => prevReminders.filter(r => r.id !== reminderId));
@@ -186,9 +186,10 @@ function App() {
       description,
       type,
       createdAt: new Date(),
+      author: userRole || undefined, // Adiciona quem criou a meta
     };
     setGoals(prev => [...prev, newGoal]);
-  }, []);
+  }, [userRole]);
 
   const handleDeleteGoal = useCallback((goalId: string) => {
     setGoals(prev => prev.filter(g => g.id !== goalId));
@@ -217,6 +218,7 @@ function App() {
       id: `t${Date.now()}`,
       description: taskDescription,
       timestamp: new Date(),
+      author: userRole || undefined, // Adiciona quem criou a tarefa
     };
     setTasks(prevTasks => [...prevTasks, newTask].sort((a, b) => a.timestamp.getTime() - b.timestamp.getTime()));
 
@@ -226,7 +228,7 @@ function App() {
         r.id === reminderId ? { ...r, linkedTaskId: newTask.id, status: 'done' as const } : r
       )
     );
-  }, []);
+  }, [userRole]);
 
   if (!userRole) {
     return <LoginScreen onLogin={handleLogin} />;

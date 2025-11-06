@@ -6,6 +6,7 @@ export interface Task {
   timestamp: Date;
   mediaUrl?: string;
   mediaType?: 'image' | 'video';
+  author?: UserRole; // Quem criou a tarefa (Pedro ou Sato)
 }
 
 export type ReminderStatus = 'pending' | 'done';
@@ -18,6 +19,7 @@ export interface Reminder {
   timestamp: Date;
   status: ReminderStatus;
   linkedTaskId?: string; // Optional link to a timeline task
+  author?: UserRole; // Quem criou o lembrete/comentário (Pedro ou Sato)
 }
 
 export interface GeminiMessage {
@@ -32,6 +34,7 @@ export interface Goal {
   description: string;
   type: GoalType;
   createdAt: Date;
+  author?: UserRole; // Quem criou a meta (Pedro ou Sato)
 }
 
 export interface GoalCompletion {
