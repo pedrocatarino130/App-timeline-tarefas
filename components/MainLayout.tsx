@@ -29,7 +29,7 @@ const MainLayout: React.FC<MainLayoutProps> = (props) => {
   return (
     <div className="max-w-4xl mx-auto flex flex-col h-screen">
       <Header userRole={props.userRole} onLogout={props.onLogout} />
-      <main className="flex-grow overflow-y-auto overflow-x-hidden px-3 py-3 sm:px-4 sm:py-4 md:px-6 md:py-5 pb-24 sm:pb-24 md:pb-28 scroll-smooth">
+      <main className="flex-grow overflow-y-auto overflow-x-hidden px-3 py-3 sm:px-4 sm:py-4 md:px-6 md:py-5 pb-24 sm:pb-24 md:pb-28 scroll-smooth" style={{ WebkitOverflowScrolling: 'touch' }}>
         {activeTab === 'Timeline' ? (
           <Timeline
             userRole={props.userRole}
