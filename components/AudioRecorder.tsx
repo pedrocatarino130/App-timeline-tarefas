@@ -9,6 +9,9 @@ const AudioRecorder: React.FC<AudioRecorderProps> = ({ onSendAudio }) => {
   const [isRecording, setIsRecording] = useState(false);
   const [recordingTime, setRecordingTime] = useState(0);
   const [isCancelled, setIsCancelled] = useState(false);
+  const [isLocked, setIsLocked] = useState(false); // Para travar gravação
+  const [slideOffset, setSlideOffset] = useState(0); // Para feedback visual do deslize
+  const [verticalOffset, setVerticalOffset] = useState(0); // Para feedback visual do arrasto vertical
 
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
@@ -72,12 +75,20 @@ const AudioRecorder: React.FC<AudioRecorderProps> = ({ onSendAudio }) => {
           streamRef.current.getTracks().forEach(track => track.stop());
           streamRef.current = null;
         }
+
+        // Resetar estados
+        setIsLocked(false);
+        setSlideOffset(0);
+        setVerticalOffset(0);
       };
 
       mediaRecorderRef.current.start();
       setIsRecording(true);
       setRecordingTime(0);
       setIsCancelled(false);
+      setIsLocked(false);
+      setSlideOffset(0);
+      setVerticalOffset(0);
 
       // Iniciar timer
       timerRef.current = setInterval(() => {
@@ -110,23 +121,44 @@ const AudioRecorder: React.FC<AudioRecorderProps> = ({ onSendAudio }) => {
     startRecording();
   };
 
+  // Handler para movimento do mouse durante gravação
+  const handleMouseMove = (e: React.MouseEvent) => {
+    if (!isRecording || isLocked || !startPositionRef.current) return;
+
+    const deltaX = e.clientX - startPositionRef.current.x;
+    const deltaY = e.clientY - startPositionRef.current.y;
+
+    // Atualizar offsets para feedback visual
+    setSlideOffset(Math.min(0, deltaX)); // Apenas movimento para esquerda (negativo)
+    setVerticalOffset(Math.min(0, deltaY)); // Apenas movimento para cima (negativo)
+
+    // Travar gravação se arrastar para cima mais de 80px
+    if (deltaY < -80) {
+      setIsLocked(true);
+      setSlideOffset(0);
+      setVerticalOffset(0);
+    }
+
+    // Cancelar se deslizar para esquerda mais de 120px
+    if (deltaX < -120) {
+      stopRecording(true);
+      setSlideOffset(0);
+      setVerticalOffset(0);
+    }
+  };
+
   // Handler para quando o usuário solta o botão (mouse)
   const handleMouseUp = (e: React.MouseEvent) => {
     e.preventDefault();
 
-    // Verificar se o usuário arrastou muito longe (cancelar)
-    if (startPositionRef.current) {
-      const distance = Math.sqrt(
-        Math.pow(e.clientX - startPositionRef.current.x, 2) +
-        Math.pow(e.clientY - startPositionRef.current.y, 2)
-      );
-
-      // Se arrastou mais de 100px, cancelar
-      if (distance > 100) {
-        stopRecording(true);
-        return;
-      }
+    // Se está travado, não fazer nada (usuário precisa clicar no botão de enviar)
+    if (isLocked) {
+      return;
     }
+
+    // Resetar offsets
+    setSlideOffset(0);
+    setVerticalOffset(0);
 
     stopRecording(false);
   };
@@ -139,38 +171,100 @@ const AudioRecorder: React.FC<AudioRecorderProps> = ({ onSendAudio }) => {
     startRecording();
   };
 
+  // Handler para movimento do touch durante gravação
+  const handleTouchMove = (e: React.TouchEvent) => {
+    if (!isRecording || isLocked || !startPositionRef.current || e.touches.length === 0) return;
+
+    const touch = e.touches[0];
+    const deltaX = touch.clientX - startPositionRef.current.x;
+    const deltaY = touch.clientY - startPositionRef.current.y;
+
+    // Atualizar offsets para feedback visual
+    setSlideOffset(Math.min(0, deltaX)); // Apenas movimento para esquerda (negativo)
+    setVerticalOffset(Math.min(0, deltaY)); // Apenas movimento para cima (negativo)
+
+    // Travar gravação se arrastar para cima mais de 80px
+    if (deltaY < -80) {
+      setIsLocked(true);
+      setSlideOffset(0);
+      setVerticalOffset(0);
+    }
+
+    // Cancelar se deslizar para esquerda mais de 120px
+    if (deltaX < -120) {
+      stopRecording(true);
+      setSlideOffset(0);
+      setVerticalOffset(0);
+    }
+  };
+
   // Handler para quando o usuário solta o touch
   const handleTouchEnd = (e: React.TouchEvent) => {
     e.preventDefault();
 
-    // Verificar se o usuário arrastou muito longe (cancelar)
-    if (e.changedTouches.length > 0 && startPositionRef.current) {
-      const touch = e.changedTouches[0];
-      const distance = Math.sqrt(
-        Math.pow(touch.clientX - startPositionRef.current.x, 2) +
-        Math.pow(touch.clientY - startPositionRef.current.y, 2)
-      );
-
-      // Se arrastou mais de 100px, cancelar
-      if (distance > 100) {
-        stopRecording(true);
-        return;
-      }
+    // Se está travado, não fazer nada
+    if (isLocked) {
+      return;
     }
+
+    // Resetar offsets
+    setSlideOffset(0);
+    setVerticalOffset(0);
 
     stopRecording(false);
   };
 
-  // Prevenir leave quando estiver gravando
+  // Prevenir leave quando estiver gravando (apenas se não estiver travado)
   const handleMouseLeave = () => {
-    if (isRecording) {
-      stopRecording(true); // Cancelar se sair do botão
+    if (isRecording && !isLocked) {
+      stopRecording(true); // Cancelar se sair do botão e não estiver travado
+      setSlideOffset(0);
+      setVerticalOffset(0);
+    }
+  };
+
+  // Função para enviar quando está no modo travado
+  const handleSendLocked = () => {
+    if (isLocked) {
+      stopRecording(false);
+    }
+  };
+
+  // Função para cancelar quando está no modo travado
+  const handleCancelLocked = () => {
+    if (isLocked) {
+      stopRecording(true);
     }
   };
 
   return (
     <div className="flex items-center gap-2">
-      {isRecording && (
+      {isRecording && !isLocked && (
+        <div
+          className="flex items-center gap-2 animate-fade-in transition-all"
+          style={{
+            transform: `translateX(${slideOffset}px) translateY(${verticalOffset}px)`,
+            opacity: slideOffset < -60 ? 0.5 : 1
+          }}
+        >
+          <div className="flex items-center gap-1">
+            <div className="w-2 h-2 bg-red-600 rounded-full animate-pulse"></div>
+            <span className="text-sm font-medium text-red-600">
+              {formatTime(recordingTime)}
+            </span>
+          </div>
+          <div className="flex flex-col items-start">
+            <span className="text-xs text-gray-500">
+              {slideOffset < -60 ? '↩ Solte para cancelar' : '⬆ Deslize para travar'}
+            </span>
+            <span className="text-xs text-gray-400">
+              {slideOffset < -60 ? '' : 'Solte para enviar'}
+            </span>
+          </div>
+        </div>
+      )}
+
+      {isRecording && isLocked && (
         <div className="flex items-center gap-2 animate-fade-in">
           <div className="flex items-center gap-1">
             <div className="w-2 h-2 bg-red-600 rounded-full animate-pulse"></div>
@@ -179,23 +273,42 @@ const AudioRecorder: React.FC<AudioRecorderProps> = ({ onSendAudio }) => {
             </span>
           </div>
           <span className="text-xs text-gray-500">
-            Solte para enviar
+            🔒 Gravação travada
           </span>
+          <div className="flex gap-2">
+            <button
+              onClick={handleCancelLocked}
+              className="px-3 py-1 text-xs bg-gray-300 dark:bg-gray-600 text-gray-700 dark:text-gray-200 rounded-full hover:bg-gray-400 active:scale-95 transition-all"
+            >
+              Cancelar
+            </button>
+            <button
+              onClick={handleSendLocked}
+              className="px-3 py-1 text-xs bg-green-600 text-white rounded-full hover:bg-green-700 active:scale-95 transition-all"
+            >
+              Enviar
+            </button>
+          </div>
         </div>
       )}
 
       <button
         onMouseDown={handleMouseDown}
         onMouseUp={handleMouseUp}
+        onMouseMove={handleMouseMove}
         onMouseLeave={handleMouseLeave}
         onTouchStart={handleTouchStart}
         onTouchEnd={handleTouchEnd}
+        onTouchMove={handleTouchMove}
         className={`p-3 rounded-full text-white transition-all select-none ${
           isRecording
             ? 'bg-red-600 scale-110 shadow-lg'
             : 'bg-blue-600 hover:bg-blue-700 active:scale-95'
         }`}
         title="Segure para gravar áudio"
+        style={{
+          transform: isRecording && !isLocked ? `translateX(${slideOffset}px) translateY(${verticalOffset}px)` : undefined
+        }}
       >
         <MicIcon className="w-6 h-6" />
       </button>
