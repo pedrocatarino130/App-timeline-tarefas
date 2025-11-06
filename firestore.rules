@@ -1,0 +1,17 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // Permite leitura e escrita no workspace compartilhado "casa_satos"
+    // Este é o workspace usado por Pedro e Sato
+    match /workspaces/casa_satos {
+      allow read, write: if true;
+    }
+
+    // Bloqueia acesso a qualquer outro documento/collection
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
