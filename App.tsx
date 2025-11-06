@@ -42,24 +42,52 @@ function App() {
   const [goalCompletions, setGoalCompletions] = useState<GoalCompletion[]>(() => loadFromLocalStorage(STORAGE_KEYS.GOAL_COMPLETIONS, defaultGoalCompletions));
 
   const [isSyncing, setIsSyncing] = useState(false);
+  const [isOnline, setIsOnline] = useState(navigator.onLine);
   const [isLoaded, setIsLoaded] = useState(false);
   const lastSyncTime = useRef(0);
   const syncTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const isSyncingFromFirebase = useRef(false); // Flag anti-loop
+
+  // Detector de online/offline
+  useEffect(() => {
+    const handleOnline = () => {
+      console.log(`[NETWORK ${new Date().toISOString()}] 🌐 Conexão restaurada`);
+      setIsOnline(true);
+    };
+
+    const handleOffline = () => {
+      console.log(`[NETWORK ${new Date().toISOString()}] ⚠️ Você está offline`);
+      setIsOnline(false);
+    };
+
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
+  }, []);
 
   // Carrega dados do Firebase ao iniciar (workspace compartilhado)
   useEffect(() => {
     const loadData = async () => {
-      console.log('🔄 Carregando dados do workspace compartilhado...');
+      console.log(`[INIT ${new Date().toISOString()}] 🔄 Carregando dados do workspace compartilhado...`);
       const firebaseData = await loadFromFirebase();
 
       if (firebaseData) {
-        console.log('✅ Dados carregados do Firebase (workspace compartilhado)!');
+        console.log(`[INIT ${new Date().toISOString()}] ✅ Dados carregados do Firebase (workspace compartilhado)!`);
+        isSyncingFromFirebase.current = true; // Ativa flag para prevenir loop
         setTasks(firebaseData.tasks);
         setReminders(firebaseData.reminders);
         setGoals(firebaseData.goals);
         setGoalCompletions(firebaseData.goalCompletions);
+        // Flag será resetada após timeout
+        setTimeout(() => {
+          isSyncingFromFirebase.current = false;
+        }, 100);
       } else {
-        console.log('📦 Usando dados do localStorage');
+        console.log(`[INIT ${new Date().toISOString()}] 📦 Usando dados do localStorage`);
       }
 
       setIsLoaded(true);
@@ -72,22 +100,31 @@ function App() {
   useEffect(() => {
     if (!isLoaded) return;
 
-    console.log('🔄 Configurando sincronização em tempo real do workspace...');
+    console.log(`[SYNC ${new Date().toISOString()}] 🔄 Configurando sincronização em tempo real do workspace...`);
     const unsubscribe = syncWithFirebase((data) => {
       // Apenas atualiza se os dados vieram de outro dispositivo
       if (data.lastUpdated && data.lastUpdated > lastSyncTime.current) {
-        console.log('📥 Dados atualizados de outro usuário/dispositivo!');
+        console.log(`[SYNC ${new Date().toISOString()}] 📥 Dados atualizados de outro usuário/dispositivo!`);
+
+        // Ativa flag para prevenir loop infinito
+        isSyncingFromFirebase.current = true;
+
         setTasks(data.tasks);
         setReminders(data.reminders);
         setGoals(data.goals);
         setGoalCompletions(data.goalCompletions);
         lastSyncTime.current = Date.now();
+
+        // Reseta flag após atualização
+        setTimeout(() => {
+          isSyncingFromFirebase.current = false;
+        }, 100);
       }
     });
 
     return () => {
       if (unsubscribe) {
-        console.log('🛑 Desconectando sincronização...');
+        console.log(`[SYNC ${new Date().toISOString()}] 🛑 Desconectando sincronização...`);
         unsubscribe();
       }
     };
@@ -96,6 +133,12 @@ function App() {
   // Salva no localStorage e Firebase com debounce
   useEffect(() => {
     if (!isLoaded) return;
+
+    // IMPORTANTE: Previne loop infinito - não salva se estamos recebendo do Firebase
+    if (isSyncingFromFirebase.current) {
+      console.log(`[SAVE ${new Date().toISOString()}] ⏭️ Pulando save (dados vieram do Firebase)`);
+      return;
+    }
 
     // Salva no localStorage imediatamente
     saveToLocalStorage(STORAGE_KEYS.TASKS, tasks);
@@ -109,6 +152,7 @@ function App() {
     }
 
     syncTimeoutRef.current = setTimeout(async () => {
+      console.log(`[SAVE ${new Date().toISOString()}] 💾 Salvando no Firebase...`);
       setIsSyncing(true);
       const userData: UserData = {
         tasks,
@@ -121,6 +165,7 @@ function App() {
       const success = await saveToFirebase(userData);
       if (success) {
         lastSyncTime.current = Date.now();
+        console.log(`[SAVE ${new Date().toISOString()}] ✅ Salvo com sucesso!`);
       }
 
       setIsSyncing(false);
@@ -236,6 +281,13 @@ function App() {
 
   return (
     <div className="min-h-screen bg-gray-100 dark:bg-gray-900 text-gray-900 dark:text-gray-100">
+      {/* Banner de status offline */}
+      {!isOnline && (
+        <div className="fixed top-0 left-0 right-0 z-50 bg-yellow-500 text-gray-900 px-4 py-2 text-center font-semibold shadow-lg">
+          ⚠️ Você está offline - Mudanças serão sincronizadas ao reconectar
+        </div>
+      )}
+
       {/* Indicador de sincronização */}
       {isSyncing && (
         <div className="fixed top-4 right-4 z-50 bg-blue-500 text-white px-4 py-2 rounded-lg shadow-lg flex items-center gap-2">

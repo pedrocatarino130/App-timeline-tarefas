@@ -1,5 +1,5 @@
 import { initializeApp, getApps, FirebaseApp } from 'firebase/app';
-import { getFirestore, Firestore } from 'firebase/firestore';
+import { getFirestore, Firestore, enableIndexedDbPersistence } from 'firebase/firestore';
 
 // Configuração do Firebase
 // IMPORTANTE: Configure suas credenciais do Firebase no objeto abaixo
@@ -24,8 +24,25 @@ try {
     app = getApps()[0];
   }
   db = getFirestore(app);
+
+  // Habilita offline persistence (IndexedDB) para funcionar sem internet
+  enableIndexedDbPersistence(db)
+    .then(() => {
+      console.log('✅ Firebase inicializado com offline persistence habilitado!');
+    })
+    .catch((err) => {
+      if (err.code === 'failed-precondition') {
+        // Múltiplas abas abertas - apenas a primeira consegue habilitar persistence
+        console.warn('⚠️ Offline persistence não pôde ser habilitado (múltiplas abas abertas)');
+      } else if (err.code === 'unimplemented') {
+        // Navegador não suporta IndexedDB
+        console.warn('⚠️ Navegador não suporta offline persistence');
+      } else {
+        console.error('❌ Erro ao habilitar offline persistence:', err);
+      }
+    });
 } catch (error) {
-  console.error('Erro ao inicializar Firebase:', error);
+  console.error('❌ Erro ao inicializar Firebase:', error);
   // Se houver erro, continuamos sem Firebase (fallback para localStorage)
 }
 

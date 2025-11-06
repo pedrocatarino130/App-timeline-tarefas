@@ -3,6 +3,7 @@ import {
   setDoc,
   getDoc,
   onSnapshot,
+  runTransaction,
   Unsubscribe,
   DocumentData
 } from 'firebase/firestore';
@@ -76,7 +77,23 @@ export const saveToLocalStorage = <T>(key: string, data: T): void => {
   }
 };
 
-// Salva todos os dados no Firebase (workspace compartilhado)
+// Função helper para fazer merge de arrays por ID (previne perda de dados)
+const mergeArraysById = <T extends { id: string }>(
+  existingArray: T[],
+  newArray: T[]
+): T[] => {
+  const merged = new Map<string, T>();
+
+  // Adiciona itens existentes
+  existingArray.forEach(item => merged.set(item.id, item));
+
+  // Sobrescreve/adiciona com novos itens (last-write-wins por item)
+  newArray.forEach(item => merged.set(item.id, item));
+
+  return Array.from(merged.values());
+};
+
+// Salva todos os dados no Firebase (workspace compartilhado) usando transação
 export const saveToFirebase = async (
   data: UserData
 ): Promise<boolean> => {
@@ -87,15 +104,36 @@ export const saveToFirebase = async (
 
   try {
     const workspaceDocRef = doc(db, 'workspaces', WORKSPACE_ID);
-    await setDoc(workspaceDocRef, {
-      ...data,
-      lastUpdated: Date.now(),
+
+    await runTransaction(db, async (transaction) => {
+      const docSnapshot = await transaction.get(workspaceDocRef);
+
+      if (!docSnapshot.exists()) {
+        // Se documento não existe, cria um novo
+        transaction.set(workspaceDocRef, {
+          ...data,
+          lastUpdated: Date.now(),
+        });
+      } else {
+        // Se existe, faz merge inteligente dos arrays
+        const existingData = docSnapshot.data() as UserData;
+
+        const mergedData: UserData = {
+          tasks: mergeArraysById(existingData.tasks || [], data.tasks),
+          reminders: mergeArraysById(existingData.reminders || [], data.reminders),
+          goals: mergeArraysById(existingData.goals || [], data.goals),
+          goalCompletions: mergeArraysById(existingData.goalCompletions || [], data.goalCompletions),
+          lastUpdated: Date.now(),
+        };
+
+        transaction.set(workspaceDocRef, mergedData);
+      }
     });
 
-    console.log('Dados salvos no Firebase com sucesso!');
+    console.log('✅ Dados salvos no Firebase com sucesso!');
     return true;
   } catch (error) {
-    console.error('Erro ao salvar no Firebase:', error);
+    console.error('❌ Erro ao salvar no Firebase:', error);
     return false;
   }
 };
@@ -152,9 +190,13 @@ export const syncWithFirebase = (
   try {
     const workspaceDocRef = doc(db, 'workspaces', WORKSPACE_ID);
 
+    console.log(`[SYNC ${new Date().toISOString()}] 🔄 Iniciando listener em tempo real...`);
+
     const unsubscribe = onSnapshot(workspaceDocRef, (doc) => {
       if (doc.exists()) {
         const data = doc.data() as UserData;
+
+        console.log(`[SYNC ${new Date().toISOString()}] 📥 Dados recebidos do Firebase (${data.tasks?.length || 0} tarefas, ${data.reminders?.length || 0} lembretes)`);
 
         // Reconverte timestamps para objetos Date
         const convertedData: UserData = {
@@ -181,14 +223,16 @@ export const syncWithFirebase = (
         saveToLocalStorage(STORAGE_KEYS.REMINDERS, convertedData.reminders);
         saveToLocalStorage(STORAGE_KEYS.GOALS, convertedData.goals);
         saveToLocalStorage(STORAGE_KEYS.GOAL_COMPLETIONS, convertedData.goalCompletions);
+
+        console.log(`[SYNC ${new Date().toISOString()}] 💾 Sincronização completa`);
       }
     }, (error) => {
-      console.error('Erro na sincronização em tempo real:', error);
+      console.error(`[SYNC ${new Date().toISOString()}] ❌ Erro na sincronização:`, error);
     });
 
     return unsubscribe;
   } catch (error) {
-    console.error('Erro ao configurar sincronização:', error);
+    console.error(`[SYNC ${new Date().toISOString()}] ❌ Erro ao configurar sincronização:`, error);
     return null;
   }
 };
