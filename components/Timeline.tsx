@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { Task, UserRole, Goal, GoalCompletion, GoalType, Reminder } from '../types';
 import TaskForm from './TaskForm';
 import GoalForm from './GoalForm';
@@ -24,7 +24,27 @@ const Timeline: React.FC<TimelineProps> = ({ userRole, tasks, goals, goalComplet
   const [viewingMedia, setViewingMedia] = useState<{ url: string, type: 'image' | 'video' } | null>(null);
   const [commentingTask, setCommentingTask] = useState<string | null>(null);
   const [commentText, setCommentText] = useState('');
+  const commentTextareaRef = useRef<HTMLTextAreaElement>(null);
+  const commentContainerRef = useRef<HTMLDivElement>(null);
   const sortedTasks = [...tasks].sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime());
+
+  // Auto-scroll quando o formulário de comentário é aberto
+  useEffect(() => {
+    if (commentingTask && commentContainerRef.current) {
+      // Aguardar renderização do DOM
+      setTimeout(() => {
+        commentContainerRef.current?.scrollIntoView({
+          behavior: 'smooth',
+          block: 'center',
+        });
+
+        // Focar no textarea após o scroll (especialmente importante no iOS)
+        setTimeout(() => {
+          commentTextareaRef.current?.focus();
+        }, 300);
+      }, 100);
+    }
+  }, [commentingTask]);
 
   const handleAddTask = (description: string, mediaUrl?: string, mediaType?: 'image' | 'video') => {
     onAddTask(description, mediaUrl, mediaType);
@@ -175,7 +195,7 @@ const Timeline: React.FC<TimelineProps> = ({ userRole, tasks, goals, goalComplet
                             )}
 
                             {commentingTask === task.id && userRole === 'Supervisor' && (
-                              <div className="mt-3 pt-3 border-t border-gray-200 dark:border-gray-700">
+                              <div ref={commentContainerRef} className="mt-3 pt-3 border-t border-gray-200 dark:border-gray-700 mb-6">
                                 <div className="mb-3">
                                   <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">Gravar áudio:</p>
                                   <AudioRecorder onSendAudio={handleSendAudioComment(task.id)} />
@@ -188,11 +208,18 @@ const Timeline: React.FC<TimelineProps> = ({ userRole, tasks, goals, goalComplet
                                 </div>
 
                                 <textarea
+                                  ref={commentTextareaRef}
                                   value={commentText}
                                   onChange={(e) => setCommentText(e.target.value)}
                                   placeholder="Escreva um comentário..."
                                   className="w-full p-3 text-sm sm:text-base border border-gray-300 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
                                   rows={3}
+                                  onFocus={(e) => {
+                                    // Scroll adicional no iOS quando o teclado aparece
+                                    setTimeout(() => {
+                                      e.target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                                    }, 300);
+                                  }}
                                 />
                                 <div className="flex flex-col sm:flex-row gap-2 mt-2">
                                   <button

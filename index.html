@@ -106,8 +106,81 @@
         max-width: 100%;
         height: auto;
       }
+
+      /* iOS smooth scrolling */
+      * {
+        -webkit-overflow-scrolling: touch;
+      }
+
+      /* Melhor comportamento de scroll no iOS */
+      main {
+        -webkit-overflow-scrolling: touch;
+        scroll-behavior: smooth;
+      }
+
+      /* Padding extra quando há input focado (iOS keyboard) */
+      body.keyboard-open {
+        padding-bottom: 300px;
+      }
+    }
+
+    /* iOS-specific fixes for keyboard and scroll */
+    @supports (-webkit-touch-callout: none) {
+      /* Isso detecta iOS */
+      body {
+        height: 100vh;
+        height: -webkit-fill-available;
+      }
+
+      /* Garantir que o scroll funcione com o teclado */
+      #root {
+        min-height: 100vh;
+        min-height: -webkit-fill-available;
+      }
     }
   </style>
+
+  <script>
+    // Detectar teclado iOS com Visual Viewport API
+    if (window.visualViewport) {
+      let lastHeight = window.visualViewport.height;
+
+      window.visualViewport.addEventListener('resize', () => {
+        const currentHeight = window.visualViewport.height;
+        const heightDiff = lastHeight - currentHeight;
+
+        // Se a viewport diminuiu mais de 100px, provavelmente o teclado apareceu
+        if (heightDiff > 100) {
+          document.body.classList.add('keyboard-open');
+
+          // Scroll para o elemento focado após um pequeno delay
+          setTimeout(() => {
+            const activeElement = document.activeElement;
+            if (activeElement && (activeElement.tagName === 'TEXTAREA' || activeElement.tagName === 'INPUT')) {
+              activeElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            }
+          }, 200);
+        } else if (heightDiff < -100) {
+          // Teclado fechou
+          document.body.classList.remove('keyboard-open');
+        }
+
+        lastHeight = currentHeight;
+      });
+    }
+
+    // Fallback para dispositivos sem Visual Viewport API
+    window.addEventListener('resize', () => {
+      if (!window.visualViewport) {
+        const activeElement = document.activeElement;
+        if (activeElement && (activeElement.tagName === 'TEXTAREA' || activeElement.tagName === 'INPUT')) {
+          setTimeout(() => {
+            activeElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          }, 300);
+        }
+      }
+    });
+  </script>
 <script type="importmap">
 {
   "imports": {
