@@ -19,7 +19,7 @@ const Chat: React.FC<ChatProps> = ({ userRole, reminders, tasks, onSendReminder,
 
   return (
     <div className="flex flex-col h-full">
-      <div className="flex-grow space-y-4">
+      <div className="flex-grow space-y-3 sm:space-y-4">
         {sortedReminders.map(reminder => (
           <ReminderItem
             key={reminder.id}
@@ -71,28 +71,28 @@ const ReminderItem: React.FC<ReminderItemProps> = ({ reminder, userRole, tasks, 
   };
 
   const content = reminder.type === 'text'
-    ? <p className={`${isDone ? 'line-through text-gray-500' : 'text-gray-800 dark:text-gray-200'}`}>{reminder.content}</p>
-    : reminder.audioUrl && <audio controls src={reminder.audioUrl} className="w-full max-w-xs" />;
+    ? <p className={`text-sm sm:text-base leading-snug ${isDone ? 'line-through text-gray-500' : 'text-gray-800 dark:text-gray-200'}`}>{reminder.content}</p>
+    : reminder.audioUrl && <audio controls src={reminder.audioUrl} className="w-full max-w-full sm:max-w-xs" />;
 
   return (
-    <div className="flex items-start space-x-3 group">
+    <div className="flex items-start gap-2 sm:gap-3 group">
       {canToggle ? (
-        <button onClick={() => onToggleStatus(reminder.id)} className="flex-shrink-0 mt-1">
-          {isDone ? <CheckCircleIcon className="w-6 h-6 text-green-500" /> : <CircleIcon className="w-6 h-6 text-gray-400" />}
+        <button onClick={() => onToggleStatus(reminder.id)} className="flex-shrink-0 mt-1 active:scale-90 transition-transform">
+          {isDone ? <CheckCircleIcon className="w-6 h-6 sm:w-7 sm:h-7 text-green-500" /> : <CircleIcon className="w-6 h-6 sm:w-7 sm:h-7 text-gray-400" />}
         </button>
       ) : (
          <div className="flex-shrink-0 mt-1">
-            {isDone ? <CheckCircleIcon className="w-6 h-6 text-green-500" /> : <CircleIcon className="w-6 h-6 text-gray-400" />}
+            {isDone ? <CheckCircleIcon className="w-6 h-6 sm:w-7 sm:h-7 text-green-500" /> : <CircleIcon className="w-6 h-6 sm:w-7 sm:h-7 text-gray-400" />}
         </div>
       )}
-      <div className="flex-grow bg-white dark:bg-gray-800 p-3 rounded-lg shadow-sm relative">
+      <div className="flex-grow bg-white dark:bg-gray-800 p-3 sm:p-4 rounded-xl shadow-md relative">
         {content}
 
         {linkedTask && (
-          <div className="mt-2 p-2 bg-blue-50 dark:bg-blue-900/20 border-l-4 border-blue-500 rounded">
-            <p className="text-xs font-semibold text-blue-600 dark:text-blue-400 mb-1">Anexo da Timeline:</p>
-            <p className="text-sm text-gray-700 dark:text-gray-300">{linkedTask.description}</p>
-            <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+          <div className="mt-2 sm:mt-3 p-2 sm:p-3 bg-blue-50 dark:bg-blue-900/20 border-l-4 border-blue-500 rounded-lg">
+            <p className="text-[10px] sm:text-xs font-bold text-blue-600 dark:text-blue-400 mb-1">Anexo da Timeline:</p>
+            <p className="text-xs sm:text-sm text-gray-700 dark:text-gray-300 leading-snug">{linkedTask.description}</p>
+            <p className="text-[10px] sm:text-xs text-gray-500 dark:text-gray-400 mt-1">
               {linkedTask.timestamp.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
             </p>
           </div>
@@ -104,19 +104,19 @@ const ReminderItem: React.FC<ReminderItemProps> = ({ reminder, userRole, tasks, 
               value={replyText}
               onChange={(e) => setReplyText(e.target.value)}
               placeholder="Descreva o que foi feito..."
-              className="w-full p-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              className="w-full p-3 text-sm sm:text-base border border-gray-300 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
               rows={3}
             />
-            <div className="flex gap-2 mt-2">
+            <div className="flex flex-col sm:flex-row gap-2 mt-2">
               <button
                 onClick={handleReply}
-                className="px-3 py-1 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+                className="flex-1 px-3 py-2.5 text-xs sm:text-sm font-semibold bg-blue-600 text-white rounded-lg hover:bg-blue-700 active:scale-95 transition-all"
               >
                 Adicionar à Timeline
               </button>
               <button
                 onClick={() => setShowReplyForm(false)}
-                className="px-3 py-1 text-sm bg-gray-300 dark:bg-gray-600 text-gray-700 dark:text-gray-200 rounded-lg hover:bg-gray-400 dark:hover:bg-gray-500"
+                className="px-3 py-2.5 text-xs sm:text-sm font-semibold bg-gray-300 dark:bg-gray-600 text-gray-700 dark:text-gray-200 rounded-lg hover:bg-gray-400 dark:hover:bg-gray-500 active:scale-95 transition-all"
               >
                 Cancelar
               </button>
@@ -124,17 +124,18 @@ const ReminderItem: React.FC<ReminderItemProps> = ({ reminder, userRole, tasks, 
           </div>
         )}
 
-        <div className="flex items-center justify-between mt-2">
-          <p className="text-xs text-gray-400 dark:text-gray-500">
+        <div className="flex items-center justify-between mt-2 sm:mt-3">
+          <p className="text-[10px] sm:text-xs font-medium text-gray-400 dark:text-gray-500">
             {reminder.timestamp.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
           </p>
           {userRole === 'Executor' && !showReplyForm && (
             <button
               onClick={() => setShowReplyForm(true)}
-              className="flex items-center gap-1 px-2 py-1 text-xs text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded transition-colors"
+              className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs sm:text-sm font-medium text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg transition-all active:scale-95"
             >
               <ReplyIcon className="w-4 h-4" />
-              Responder
+              <span className="hidden sm:inline">Responder</span>
+              <span className="sm:hidden">↩</span>
             </button>
           )}
         </div>
@@ -142,10 +143,10 @@ const ReminderItem: React.FC<ReminderItemProps> = ({ reminder, userRole, tasks, 
         {userRole === 'Supervisor' && (
             <button
                 onClick={handleDelete}
-                className="absolute top-1 right-1 p-1 text-gray-400 hover:text-red-500 rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
+                className="absolute top-2 right-2 p-1.5 sm:p-2 text-gray-400 hover:text-red-500 rounded-full opacity-0 group-hover:opacity-100 transition-all active:scale-90"
                 aria-label="Apagar Lembrete"
             >
-                <TrashIcon className="w-4 h-4" />
+                <TrashIcon className="w-4 h-4 sm:w-5 sm:h-5" />
             </button>
         )}
       </div>

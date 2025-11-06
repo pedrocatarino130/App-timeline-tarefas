@@ -29,7 +29,7 @@ const MainLayout: React.FC<MainLayoutProps> = (props) => {
   return (
     <div className="max-w-4xl mx-auto flex flex-col h-screen">
       <Header userRole={props.userRole} onLogout={props.onLogout} />
-      <main className="flex-grow overflow-y-auto p-4 md:p-6 pb-32 sm:pb-28">
+      <main className="flex-grow overflow-y-auto overflow-x-hidden px-3 py-3 sm:px-4 sm:py-4 md:px-6 md:py-5 pb-24 sm:pb-24 md:pb-28 scroll-smooth">
         {activeTab === 'Timeline' ? (
           <Timeline
             userRole={props.userRole}
@@ -56,8 +56,8 @@ const MainLayout: React.FC<MainLayoutProps> = (props) => {
           />
         )}
       </main>
-      <nav className="fixed bottom-0 left-0 right-0 max-w-4xl mx-auto bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700 shadow-lg safe-area-bottom">
-        <div className="flex justify-around">
+      <nav className="fixed bottom-0 left-0 right-0 max-w-4xl mx-auto bg-white/95 dark:bg-gray-800/95 backdrop-blur-lg border-t border-gray-200 dark:border-gray-700 shadow-lg safe-area-bottom z-50">
+        <div className="flex justify-around items-stretch h-16 sm:h-18">
           <TabButton
             label="Timeline"
             icon={<TimelineIcon />}
@@ -84,16 +84,16 @@ interface TabButtonProps {
 }
 
 const TabButton: React.FC<TabButtonProps> = ({ label, icon, isActive, onClick }) => {
-  const activeClasses = 'text-blue-600 dark:text-blue-400 border-t-2 border-blue-600 dark:border-blue-400';
-  const inactiveClasses = 'text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700';
+  const activeClasses = 'text-blue-600 dark:text-blue-400 border-t-2 border-blue-600 dark:border-blue-400 bg-blue-50/50 dark:bg-blue-900/20';
+  const inactiveClasses = 'text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 border-t-2 border-transparent';
 
   return (
     <button
       onClick={onClick}
-      className={`flex-1 flex flex-col items-center justify-center py-3 px-2 sm:p-4 transition-colors duration-200 ${isActive ? activeClasses : inactiveClasses}`}
+      className={`flex-1 flex flex-col items-center justify-center py-2 px-2 sm:py-3 sm:px-3 transition-all duration-200 active:scale-95 ${isActive ? activeClasses : inactiveClasses}`}
     >
-      <div className="w-6 h-6 sm:w-7 sm:h-7">{icon}</div>
-      <span className="text-xs sm:text-sm font-medium mt-1">{label}</span>
+      <div className="w-7 h-7 sm:w-8 sm:h-8 mb-0.5">{icon}</div>
+      <span className="text-[10px] sm:text-xs font-semibold tracking-wide">{label}</span>
     </button>
   );
 };
