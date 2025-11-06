@@ -22,6 +22,12 @@
       padding-bottom: env(safe-area-inset-bottom);
     }
 
+    /* Smooth scrolling */
+    html {
+      scroll-behavior: smooth;
+      overflow-x: hidden;
+    }
+
     /* Prevent zoom on input focus (iOS) */
     input, textarea, select {
       font-size: 16px !important;
@@ -32,6 +38,73 @@
       button, a {
         min-height: 44px;
         min-width: 44px;
+      }
+    }
+
+    /* Prevent horizontal scroll on mobile */
+    body {
+      overflow-x: hidden;
+      width: 100%;
+      position: relative;
+    }
+
+    /* Better scrollbar for webkit browsers */
+    ::-webkit-scrollbar {
+      width: 8px;
+      height: 8px;
+    }
+
+    ::-webkit-scrollbar-track {
+      background: transparent;
+    }
+
+    ::-webkit-scrollbar-thumb {
+      background: rgba(156, 163, 175, 0.5);
+      border-radius: 4px;
+    }
+
+    ::-webkit-scrollbar-thumb:hover {
+      background: rgba(156, 163, 175, 0.7);
+    }
+
+    /* Dark mode scrollbar */
+    .dark ::-webkit-scrollbar-thumb {
+      background: rgba(75, 85, 99, 0.5);
+    }
+
+    .dark ::-webkit-scrollbar-thumb:hover {
+      background: rgba(75, 85, 99, 0.7);
+    }
+
+    /* Smooth transitions for theme changes */
+    * {
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    /* Better focus visible for accessibility */
+    button:focus-visible,
+    a:focus-visible {
+      outline: 2px solid #3b82f6;
+      outline-offset: 2px;
+    }
+
+    /* Mobile-specific optimizations */
+    @media (max-width: 640px) {
+      /* Disable pull-to-refresh on Chrome mobile */
+      body {
+        overscroll-behavior-y: contain;
+      }
+
+      /* Better text rendering on mobile */
+      body {
+        text-rendering: optimizeLegibility;
+        -webkit-text-size-adjust: 100%;
+      }
+
+      /* Ensure images don't overflow */
+      img, video {
+        max-width: 100%;
+        height: auto;
       }
     }
   </style>
