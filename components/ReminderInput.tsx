@@ -1,7 +1,7 @@
 
 import React, { useState } from 'react';
 import { Reminder } from '../types';
-import AudioRecorder from './AudioRecorder';
+import WhatsAppAudioRecorder from './WhatsAppAudioRecorder';
 import { SendIcon } from './Icons';
 
 interface ReminderInputProps {
@@ -18,7 +18,7 @@ const ReminderInput: React.FC<ReminderInputProps> = ({ onSend }) => {
     }
   };
 
-  const handleSendAudio = (audioUrl: string, audioBlob: Blob) => {
+  const handleSendAudio = (audioBlob: Blob, audioUrl: string) => {
      onSend({ type: 'audio', content: 'Mensagem de áudio', audioUrl });
   };
 
@@ -38,7 +38,7 @@ const ReminderInput: React.FC<ReminderInputProps> = ({ onSend }) => {
                 <SendIcon className="w-6 h-6" />
             </button>
         ) : (
-            <AudioRecorder onSendAudio={handleSendAudio} />
+            <WhatsAppAudioRecorder onSendAudio={handleSendAudio} />
         )}
       </div>
     </div>

@@ -2,6 +2,7 @@ import React, { useState, useMemo } from 'react';
 import { Task, UserRole, Goal, GoalCompletion, GoalType, Reminder } from '../types';
 import TaskForm from './TaskForm';
 import GoalForm from './GoalForm';
+import WhatsAppAudioRecorder from './WhatsAppAudioRecorder';
 import { PlusIcon, CheckCircleIcon, CircleIcon, TargetIcon, TrashIcon, CloseIcon, CommentIcon } from './Icons';
 
 interface TimelineProps {
@@ -23,9 +24,6 @@ const Timeline: React.FC<TimelineProps> = ({ userRole, tasks, goals, goalComplet
   const [viewingMedia, setViewingMedia] = useState<{ url: string, type: 'image' | 'video' } | null>(null);
   const [commentingTask, setCommentingTask] = useState<string | null>(null);
   const [commentText, setCommentText] = useState('');
-  const [isRecording, setIsRecording] = useState(false);
-  const [mediaRecorder, setMediaRecorder] = useState<MediaRecorder | null>(null);
-  const [audioBlob, setAudioBlob] = useState<Blob | null>(null);
   const sortedTasks = [...tasks].sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime());
 
   const handleAddTask = (description: string, mediaUrl?: string, mediaType?: 'image' | 'video') => {
@@ -63,62 +61,19 @@ const Timeline: React.FC<TimelineProps> = ({ userRole, tasks, goals, goalComplet
     }
   };
 
-  const startRecording = async () => {
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      const recorder = new MediaRecorder(stream);
-      const chunks: BlobPart[] = [];
-
-      recorder.ondataavailable = (e) => {
-        if (e.data.size > 0) {
-          chunks.push(e.data);
-        }
-      };
-
-      recorder.onstop = () => {
-        const blob = new Blob(chunks, { type: 'audio/webm' });
-        setAudioBlob(blob);
-        stream.getTracks().forEach(track => track.stop());
-      };
-
-      recorder.start();
-      setMediaRecorder(recorder);
-      setIsRecording(true);
-    } catch (error) {
-      console.error('Error accessing microphone:', error);
-      alert('Não foi possível acessar o microfone. Verifique as permissões.');
-    }
-  };
-
-  const stopRecording = () => {
-    if (mediaRecorder && isRecording) {
-      mediaRecorder.stop();
-      setIsRecording(false);
-      setMediaRecorder(null);
-    }
-  };
-
-  const sendAudioComment = (taskId: string) => {
-    if (audioBlob) {
-      const audioUrl = URL.createObjectURL(audioBlob);
-      onSendReminder({
-        type: 'audio',
-        content: 'Comentário em áudio',
-        audioUrl: audioUrl,
-        linkedTaskId: taskId,
-      });
-      setAudioBlob(null);
-      setCommentingTask(null);
-    }
+  const handleSendAudioComment = (taskId: string) => (audioBlob: Blob, audioUrl: string) => {
+    onSendReminder({
+      type: 'audio',
+      content: 'Comentário em áudio',
+      audioUrl: audioUrl,
+      linkedTaskId: taskId,
+    });
+    setCommentingTask(null);
   };
 
   const cancelComment = () => {
     setCommentingTask(null);
     setCommentText('');
-    setAudioBlob(null);
-    if (isRecording) {
-      stopRecording();
-    }
   };
 
   const formatDate = (date: Date) => {
@@ -221,66 +176,37 @@ const Timeline: React.FC<TimelineProps> = ({ userRole, tasks, goals, goalComplet
 
                             {commentingTask === task.id && userRole === 'Supervisor' && (
                               <div className="mt-3 pt-3 border-t border-gray-200 dark:border-gray-700">
-                                <div className="flex flex-col sm:flex-row gap-2 mb-2">
-                                  <button
-                                    onClick={isRecording ? stopRecording : startRecording}
-                                    className={`flex items-center justify-center gap-2 px-4 py-2 text-sm font-medium rounded-lg transition-colors ${
-                                      isRecording
-                                        ? 'bg-red-600 text-white hover:bg-red-700 animate-pulse'
-                                        : 'bg-purple-600 text-white hover:bg-purple-700'
-                                    }`}
-                                  >
-                                    {isRecording ? '⏹️ Parar Gravação' : '🎤 Gravar Áudio'}
-                                  </button>
+                                <div className="mb-3">
+                                  <p className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                                    Gravar Áudio (estilo WhatsApp):
+                                  </p>
+                                  <WhatsAppAudioRecorder onSendAudio={handleSendAudioComment(task.id)} />
                                 </div>
 
-                                {audioBlob && !isRecording && (
-                                  <div className="mb-3 p-3 bg-purple-50 dark:bg-purple-900/20 rounded-lg">
-                                    <p className="text-sm font-medium text-purple-800 dark:text-purple-300 mb-2">Áudio gravado:</p>
-                                    <audio src={URL.createObjectURL(audioBlob)} controls className="w-full" />
-                                    <div className="flex gap-2 mt-2">
-                                      <button
-                                        onClick={() => sendAudioComment(task.id)}
-                                        className="flex-1 px-3 py-2 text-sm bg-purple-600 text-white rounded-lg hover:bg-purple-700"
-                                      >
-                                        Enviar Áudio para Chat
-                                      </button>
-                                      <button
-                                        onClick={() => setAudioBlob(null)}
-                                        className="px-3 py-2 text-sm bg-gray-300 dark:bg-gray-600 text-gray-700 dark:text-gray-200 rounded-lg hover:bg-gray-400 dark:hover:bg-gray-500"
-                                      >
-                                        Descartar
-                                      </button>
-                                    </div>
+                                <div className="border-t border-gray-200 dark:border-gray-700 pt-3">
+                                  <textarea
+                                    value={commentText}
+                                    onChange={(e) => setCommentText(e.target.value)}
+                                    placeholder="Ou escreva um comentário de texto..."
+                                    className="w-full p-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                    rows={3}
+                                  />
+                                  <div className="flex gap-2 mt-2">
+                                    <button
+                                      onClick={() => handleAddComment(task.id)}
+                                      disabled={!commentText.trim()}
+                                      className="px-3 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                                    >
+                                      Enviar Texto para Chat
+                                    </button>
+                                    <button
+                                      onClick={cancelComment}
+                                      className="px-3 py-2 text-sm bg-gray-300 dark:bg-gray-600 text-gray-700 dark:text-gray-200 rounded-lg hover:bg-gray-400 dark:hover:bg-gray-500"
+                                    >
+                                      Cancelar
+                                    </button>
                                   </div>
-                                )}
-
-                                {!audioBlob && !isRecording && (
-                                  <>
-                                    <textarea
-                                      value={commentText}
-                                      onChange={(e) => setCommentText(e.target.value)}
-                                      placeholder="Ou escreva um comentário..."
-                                      className="w-full p-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                                      rows={3}
-                                    />
-                                    <div className="flex gap-2 mt-2">
-                                      <button
-                                        onClick={() => handleAddComment(task.id)}
-                                        disabled={!commentText.trim()}
-                                        className="px-3 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
-                                      >
-                                        Enviar Texto para Chat
-                                      </button>
-                                      <button
-                                        onClick={cancelComment}
-                                        className="px-3 py-2 text-sm bg-gray-300 dark:bg-gray-600 text-gray-700 dark:text-gray-200 rounded-lg hover:bg-gray-400 dark:hover:bg-gray-500"
-                                      >
-                                        Cancelar
-                                      </button>
-                                    </div>
-                                  </>
-                                )}
+                                </div>
                               </div>
                             )}
 
