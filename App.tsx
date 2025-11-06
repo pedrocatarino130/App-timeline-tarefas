@@ -1,64 +1,17 @@
-import React, { useState, useCallback, useEffect } from 'react';
+import React, { useState, useCallback, useEffect, useRef } from 'react';
 import { UserRole, Task, Reminder, Goal, GoalType, GoalCompletion } from './types';
 import LoginScreen from './components/LoginScreen';
 import MainLayout from './components/MainLayout';
-
-// Storage keys
-const STORAGE_KEYS = {
-  TASKS: 'pet_hotel_tasks',
-  REMINDERS: 'pet_hotel_reminders',
-  GOALS: 'pet_hotel_goals',
-  GOAL_COMPLETIONS: 'pet_hotel_goal_completions',
-};
-
-// Helper functions for localStorage
-const loadFromStorage = <T,>(key: string, defaultValue: T): T => {
-  if (typeof window === 'undefined') return defaultValue;
-
-  try {
-    const stored = localStorage.getItem(key);
-    if (!stored) return defaultValue;
-
-    const parsed = JSON.parse(stored);
-
-    // Convert date strings back to Date objects
-    if (key === STORAGE_KEYS.TASKS) {
-      return (parsed as Task[]).map((task: Task) => ({
-        ...task,
-        timestamp: new Date(task.timestamp),
-      })) as T;
-    }
-
-    if (key === STORAGE_KEYS.REMINDERS) {
-      return (parsed as Reminder[]).map((reminder: Reminder) => ({
-        ...reminder,
-        timestamp: new Date(reminder.timestamp),
-      })) as T;
-    }
-
-    if (key === STORAGE_KEYS.GOALS) {
-      return (parsed as Goal[]).map((goal: Goal) => ({
-        ...goal,
-        createdAt: new Date(goal.createdAt),
-      })) as T;
-    }
-
-    return parsed;
-  } catch (error) {
-    console.error(`Error loading ${key} from storage:`, error);
-    return defaultValue;
-  }
-};
-
-const saveToStorage = <T,>(key: string, value: T): void => {
-  if (typeof window === 'undefined') return;
-
-  try {
-    localStorage.setItem(key, JSON.stringify(value));
-  } catch (error) {
-    console.error(`Error saving ${key} to storage:`, error);
-  }
-};
+import {
+  STORAGE_KEYS,
+  loadFromLocalStorage,
+  saveToLocalStorage,
+  getUserId,
+  saveToFirebase,
+  loadFromFirebase,
+  syncWithFirebase,
+  UserData,
+} from './services/syncService';
 
 // Default initial data (used only if localStorage is empty)
 const defaultTasks: Task[] = [
@@ -84,27 +37,103 @@ const defaultGoalCompletions: GoalCompletion[] = [
 
 function App() {
   const [userRole, setUserRole] = useState<UserRole | null>(null);
-  const [tasks, setTasks] = useState<Task[]>(() => loadFromStorage(STORAGE_KEYS.TASKS, defaultTasks));
-  const [reminders, setReminders] = useState<Reminder[]>(() => loadFromStorage(STORAGE_KEYS.REMINDERS, defaultReminders));
-  const [goals, setGoals] = useState<Goal[]>(() => loadFromStorage(STORAGE_KEYS.GOALS, defaultGoals));
-  const [goalCompletions, setGoalCompletions] = useState<GoalCompletion[]>(() => loadFromStorage(STORAGE_KEYS.GOAL_COMPLETIONS, defaultGoalCompletions));
+  const [tasks, setTasks] = useState<Task[]>(() => loadFromLocalStorage(STORAGE_KEYS.TASKS, defaultTasks));
+  const [reminders, setReminders] = useState<Reminder[]>(() => loadFromLocalStorage(STORAGE_KEYS.REMINDERS, defaultReminders));
+  const [goals, setGoals] = useState<Goal[]>(() => loadFromLocalStorage(STORAGE_KEYS.GOALS, defaultGoals));
+  const [goalCompletions, setGoalCompletions] = useState<GoalCompletion[]>(() => loadFromLocalStorage(STORAGE_KEYS.GOAL_COMPLETIONS, defaultGoalCompletions));
 
-  // Save to localStorage whenever data changes
-  useEffect(() => {
-    saveToStorage(STORAGE_KEYS.TASKS, tasks);
-  }, [tasks]);
+  const [isSyncing, setIsSyncing] = useState(false);
+  const [isLoaded, setIsLoaded] = useState(false);
+  const userId = useRef(getUserId());
+  const lastSyncTime = useRef(0);
+  const syncTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
+  // Carrega dados do Firebase ao iniciar
   useEffect(() => {
-    saveToStorage(STORAGE_KEYS.REMINDERS, reminders);
-  }, [reminders]);
+    const loadData = async () => {
+      console.log('🔄 Carregando dados do Firebase...');
+      const firebaseData = await loadFromFirebase(userId.current);
 
-  useEffect(() => {
-    saveToStorage(STORAGE_KEYS.GOALS, goals);
-  }, [goals]);
+      if (firebaseData) {
+        console.log('✅ Dados carregados do Firebase!');
+        setTasks(firebaseData.tasks);
+        setReminders(firebaseData.reminders);
+        setGoals(firebaseData.goals);
+        setGoalCompletions(firebaseData.goalCompletions);
+      } else {
+        console.log('📦 Usando dados do localStorage');
+      }
 
+      setIsLoaded(true);
+    };
+
+    loadData();
+  }, []);
+
+  // Sincronização em tempo real
   useEffect(() => {
-    saveToStorage(STORAGE_KEYS.GOAL_COMPLETIONS, goalCompletions);
-  }, [goalCompletions]);
+    if (!isLoaded) return;
+
+    console.log('🔄 Configurando sincronização em tempo real...');
+    const unsubscribe = syncWithFirebase(userId.current, (data) => {
+      // Apenas atualiza se os dados vieram de outro dispositivo
+      if (data.lastUpdated && data.lastUpdated > lastSyncTime.current) {
+        console.log('📥 Dados atualizados de outro dispositivo!');
+        setTasks(data.tasks);
+        setReminders(data.reminders);
+        setGoals(data.goals);
+        setGoalCompletions(data.goalCompletions);
+        lastSyncTime.current = Date.now();
+      }
+    });
+
+    return () => {
+      if (unsubscribe) {
+        console.log('🛑 Desconectando sincronização...');
+        unsubscribe();
+      }
+    };
+  }, [isLoaded]);
+
+  // Salva no localStorage e Firebase com debounce
+  useEffect(() => {
+    if (!isLoaded) return;
+
+    // Salva no localStorage imediatamente
+    saveToLocalStorage(STORAGE_KEYS.TASKS, tasks);
+    saveToLocalStorage(STORAGE_KEYS.REMINDERS, reminders);
+    saveToLocalStorage(STORAGE_KEYS.GOALS, goals);
+    saveToLocalStorage(STORAGE_KEYS.GOAL_COMPLETIONS, goalCompletions);
+
+    // Salva no Firebase com debounce de 500ms
+    if (syncTimeoutRef.current) {
+      clearTimeout(syncTimeoutRef.current);
+    }
+
+    syncTimeoutRef.current = setTimeout(async () => {
+      setIsSyncing(true);
+      const userData: UserData = {
+        tasks,
+        reminders,
+        goals,
+        goalCompletions,
+        lastUpdated: Date.now(),
+      };
+
+      const success = await saveToFirebase(userId.current, userData);
+      if (success) {
+        lastSyncTime.current = Date.now();
+      }
+
+      setIsSyncing(false);
+    }, 500);
+
+    return () => {
+      if (syncTimeoutRef.current) {
+        clearTimeout(syncTimeoutRef.current);
+      }
+    };
+  }, [tasks, reminders, goals, goalCompletions, isLoaded]);
 
   const handleLogin = (role: UserRole) => {
     setUserRole(role);
@@ -205,6 +234,14 @@ function App() {
 
   return (
     <div className="min-h-screen bg-gray-100 dark:bg-gray-900 text-gray-900 dark:text-gray-100">
+      {/* Indicador de sincronização */}
+      {isSyncing && (
+        <div className="fixed top-4 right-4 z-50 bg-blue-500 text-white px-4 py-2 rounded-lg shadow-lg flex items-center gap-2">
+          <div className="animate-spin h-4 w-4 border-2 border-white border-t-transparent rounded-full"></div>
+          <span>Sincronizando...</span>
+        </div>
+      )}
+
       <MainLayout
         userRole={userRole}
         tasks={tasks}
