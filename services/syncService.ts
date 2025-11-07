@@ -98,23 +98,26 @@ export const saveToFirebase = async (
   data: UserData
 ): Promise<boolean> => {
   if (!db) {
-    console.warn('Firebase não está configurado. Usando apenas localStorage.');
+    console.warn('⚠️ [SYNC] Firebase não está configurado. Usando apenas localStorage.');
     return false;
   }
 
   try {
+    console.log(`🔧 [SYNC] Salvando dados no workspace: ${WORKSPACE_ID}`);
     const workspaceDocRef = doc(db, 'workspaces', WORKSPACE_ID);
 
     await runTransaction(db, async (transaction) => {
       const docSnapshot = await transaction.get(workspaceDocRef);
 
       if (!docSnapshot.exists()) {
+        console.log('📝 [SYNC] Documento não existe, criando novo...');
         // Se documento não existe, cria um novo
         transaction.set(workspaceDocRef, {
           ...data,
           lastUpdated: Date.now(),
         });
       } else {
+        console.log('🔄 [SYNC] Documento existe, fazendo merge...');
         // Se existe, faz merge inteligente dos arrays
         const existingData = docSnapshot.data() as UserData;
 
@@ -130,10 +133,23 @@ export const saveToFirebase = async (
       }
     });
 
-    console.log('✅ Dados salvos no Firebase com sucesso!');
+    console.log('✅ [SYNC] Dados salvos no Firebase com sucesso!');
     return true;
-  } catch (error) {
-    console.error('❌ Erro ao salvar no Firebase:', error);
+  } catch (error: any) {
+    console.error('❌ [SYNC] Erro ao salvar no Firebase:', error);
+
+    // Diagnóstico de erros específicos
+    if (error.code === 'permission-denied') {
+      console.error('🚨 [SYNC] ERRO DE PERMISSÃO!');
+      console.error('💡 [SYNC] Solução: Configure as regras do Firestore no Firebase Console');
+      console.error('💡 [SYNC] Vá em: Firestore Database → Regras → Cole as regras → Publicar');
+    } else if (error.code === 'unavailable') {
+      console.error('🚨 [SYNC] Firebase está indisponível (sem internet ou serviço offline)');
+    } else {
+      console.error('🚨 [SYNC] Código do erro:', error.code);
+      console.error('🚨 [SYNC] Mensagem:', error.message);
+    }
+
     return false;
   }
 };
@@ -141,16 +157,18 @@ export const saveToFirebase = async (
 // Carrega dados do Firebase (workspace compartilhado)
 export const loadFromFirebase = async (): Promise<UserData | null> => {
   if (!db) {
-    console.warn('Firebase não está configurado. Usando apenas localStorage.');
+    console.warn('⚠️ [SYNC] Firebase não está configurado. Usando apenas localStorage.');
     return null;
   }
 
   try {
+    console.log(`🔧 [SYNC] Carregando dados do workspace: ${WORKSPACE_ID}`);
     const workspaceDocRef = doc(db, 'workspaces', WORKSPACE_ID);
     const docSnap = await getDoc(workspaceDocRef);
 
     if (docSnap.exists()) {
       const data = docSnap.data() as UserData;
+      console.log(`✅ [SYNC] Dados carregados! (${data.tasks?.length || 0} tarefas, ${data.reminders?.length || 0} lembretes)`);
 
       // Reconverte timestamps para objetos Date
       return {
@@ -171,9 +189,19 @@ export const loadFromFirebase = async (): Promise<UserData | null> => {
       };
     }
 
+    console.log('ℹ️ [SYNC] Workspace não existe ainda no Firebase (será criado no primeiro save)');
     return null;
-  } catch (error) {
-    console.error('Erro ao carregar do Firebase:', error);
+  } catch (error: any) {
+    console.error('❌ [SYNC] Erro ao carregar do Firebase:', error);
+
+    // Diagnóstico
+    if (error.code === 'permission-denied') {
+      console.error('🚨 [SYNC] ERRO DE PERMISSÃO ao ler dados!');
+      console.error('💡 [SYNC] Configure as regras do Firestore no Firebase Console');
+    } else {
+      console.error('🚨 [SYNC] Código do erro:', error.code);
+    }
+
     return null;
   }
 };

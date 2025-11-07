@@ -17,32 +17,48 @@ const firebaseConfig = {
 let app: FirebaseApp;
 let db: Firestore;
 
+console.log('🔧 [FIREBASE] Iniciando configuração...');
+console.log('🔧 [FIREBASE] Credenciais:', {
+  projectId: firebaseConfig.projectId,
+  authDomain: firebaseConfig.authDomain,
+  apiKey: firebaseConfig.apiKey ? '✅ Configurada' : '❌ Faltando'
+});
+
 try {
   if (!getApps().length) {
+    console.log('🔧 [FIREBASE] Inicializando app pela primeira vez...');
     app = initializeApp(firebaseConfig);
+    console.log('✅ [FIREBASE] App inicializado com sucesso!');
   } else {
+    console.log('ℹ️ [FIREBASE] App já estava inicializado, reutilizando...');
     app = getApps()[0];
   }
+
   db = getFirestore(app);
+  console.log('✅ [FIREBASE] Firestore conectado!');
 
   // Habilita offline persistence (IndexedDB) para funcionar sem internet
   enableIndexedDbPersistence(db)
     .then(() => {
-      console.log('✅ Firebase inicializado com offline persistence habilitado!');
+      console.log('✅ [FIREBASE] Offline persistence habilitado!');
+      console.log('🎉 [FIREBASE] Tudo pronto! Sincronização em tempo real ativa.');
     })
     .catch((err) => {
       if (err.code === 'failed-precondition') {
         // Múltiplas abas abertas - apenas a primeira consegue habilitar persistence
-        console.warn('⚠️ Offline persistence não pôde ser habilitado (múltiplas abas abertas)');
+        console.warn('⚠️ [FIREBASE] Offline persistence não pôde ser habilitado (múltiplas abas abertas)');
+        console.warn('ℹ️ [FIREBASE] Sincronização ainda funciona, apenas sem cache offline nesta aba.');
       } else if (err.code === 'unimplemented') {
         // Navegador não suporta IndexedDB
-        console.warn('⚠️ Navegador não suporta offline persistence');
+        console.warn('⚠️ [FIREBASE] Navegador não suporta offline persistence');
+        console.warn('ℹ️ [FIREBASE] Sincronização online ainda funciona normalmente.');
       } else {
-        console.error('❌ Erro ao habilitar offline persistence:', err);
+        console.error('❌ [FIREBASE] Erro ao habilitar offline persistence:', err);
       }
     });
 } catch (error) {
-  console.error('❌ Erro ao inicializar Firebase:', error);
+  console.error('❌ [FIREBASE] ERRO CRÍTICO ao inicializar:', error);
+  console.error('❌ [FIREBASE] App vai funcionar APENAS com localStorage (sem sincronização)');
   // Se houver erro, continuamos sem Firebase (fallback para localStorage)
 }
 
