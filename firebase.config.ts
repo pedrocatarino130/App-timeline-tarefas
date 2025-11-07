@@ -1,16 +1,16 @@
 import { initializeApp, getApps, FirebaseApp } from 'firebase/app';
 import { getFirestore, Firestore, enableIndexedDbPersistence } from 'firebase/firestore';
 
-// Configuração do Firebase
-// IMPORTANTE: Configure suas credenciais do Firebase no objeto abaixo
-// Você pode obter essas credenciais em: https://console.firebase.google.com/
+// Configuração do Firebase - Casa Satos Pet Hotel
+// Credenciais do projeto: casa-satos-pet-hotel
+// Estas credenciais são seguras para serem públicas - Firebase usa regras de segurança do Firestore
 const firebaseConfig = {
-  apiKey: import.meta.env.VITE_FIREBASE_API_KEY || "sua-api-key-aqui",
-  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || "seu-projeto.firebaseapp.com",
-  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID || "seu-projeto-id",
-  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET || "seu-projeto.appspot.com",
-  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID || "123456789",
-  appId: import.meta.env.VITE_FIREBASE_APP_ID || "1:123456789:web:abcdef"
+  apiKey: import.meta.env.VITE_FIREBASE_API_KEY || "AIzaSyCznbg7WdWxmvKpVktDZbwQqNDJXjXm1XQ",
+  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || "casa-satos-pet-hotel.firebaseapp.com",
+  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID || "casa-satos-pet-hotel",
+  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET || "casa-satos-pet-hotel.firebasestorage.app",
+  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID || "142705392038",
+  appId: import.meta.env.VITE_FIREBASE_APP_ID || "1:142705392038:web:242a8d4e6c5238eb907767"
 };
 
 // Inicializa Firebase apenas se ainda não foi inicializado
