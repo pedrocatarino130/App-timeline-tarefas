@@ -44,6 +44,7 @@ function App() {
   const [isSyncing, setIsSyncing] = useState(false);
   const [isOnline, setIsOnline] = useState(navigator.onLine);
   const [isLoaded, setIsLoaded] = useState(false);
+  const [firebaseError, setFirebaseError] = useState<string | null>(null); // Erro visível na tela
   const lastSyncTime = useRef(0);
   const syncTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const isSyncingFromFirebase = useRef(false); // Flag anti-loop
@@ -155,6 +156,8 @@ function App() {
     syncTimeoutRef.current = setTimeout(async () => {
       console.log(`[SAVE ${new Date().toISOString()}] 💾 Salvando no Firebase...`);
       setIsSyncing(true);
+      setFirebaseError(null); // Limpa erro anterior
+
       const userData: UserData = {
         tasks,
         reminders,
@@ -163,10 +166,27 @@ function App() {
         lastUpdated: Date.now(),
       };
 
-      const success = await saveToFirebase(userData);
-      if (success) {
-        lastSyncTime.current = Date.now();
-        console.log(`[SAVE ${new Date().toISOString()}] ✅ Salvo com sucesso!`);
+      try {
+        const success = await saveToFirebase(userData);
+        if (success) {
+          lastSyncTime.current = Date.now();
+          console.log(`[SAVE ${new Date().toISOString()}] ✅ Salvo com sucesso!`);
+          setFirebaseError(null); // Limpa qualquer erro anterior
+        } else {
+          // Se retornou false, houve algum problema
+          setFirebaseError('Erro ao sincronizar com Firebase. Dados salvos localmente.');
+        }
+      } catch (error: any) {
+        console.error('[SAVE] Exceção capturada:', error);
+
+        // Mostra erro específico na tela
+        if (error.code === 'permission-denied') {
+          setFirebaseError('🚨 ERRO: Regras do Firestore não configuradas! Vá no Firebase Console → Firestore → Regras → Publicar');
+        } else if (error.code === 'unavailable') {
+          setFirebaseError('⚠️ Firebase indisponível. Tentando novamente...');
+        } else {
+          setFirebaseError(`Erro Firebase: ${error.code || error.message}`);
+        }
       }
 
       setIsSyncing(false);
@@ -286,6 +306,23 @@ function App() {
       {!isOnline && (
         <div className="fixed top-0 left-0 right-0 z-50 bg-yellow-500 text-gray-900 px-4 py-2 text-center font-semibold shadow-lg">
           ⚠️ Você está offline - Mudanças serão sincronizadas ao reconectar
+        </div>
+      )}
+
+      {/* Banner de erro do Firebase - VISÍVEL NA TELA */}
+      {firebaseError && (
+        <div
+          className="fixed left-0 right-0 z-50 bg-red-600 text-white px-4 py-3 text-center font-semibold shadow-lg"
+          style={{ top: !isOnline ? '48px' : '0' }}
+        >
+          <div className="text-sm mb-1">🚨 ERRO DE SINCRONIZAÇÃO</div>
+          <div className="text-xs">{firebaseError}</div>
+          <button
+            onClick={() => setFirebaseError(null)}
+            className="mt-2 px-3 py-1 bg-white text-red-600 rounded text-xs font-bold"
+          >
+            Fechar
+          </button>
         </div>
       )}
 
