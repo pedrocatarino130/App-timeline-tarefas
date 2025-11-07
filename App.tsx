@@ -11,6 +11,7 @@ import {
   syncWithFirebase,
   UserData,
 } from './services/syncService';
+import { db } from './firebase.config';
 
 // Default initial data (used only if localStorage is empty)
 const defaultTasks: Task[] = [
@@ -48,6 +49,7 @@ function App() {
   const lastSyncTime = useRef(0);
   const syncTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const isSyncingFromFirebase = useRef(false); // Flag anti-loop
+  const lastSavedTimestamp = useRef(0); // Timestamp do último save local
 
   // Detector de online/offline
   useEffect(() => {
@@ -74,15 +76,18 @@ function App() {
   useEffect(() => {
     const loadData = async () => {
       console.log(`[INIT ${new Date().toISOString()}] 🔄 Carregando dados do workspace compartilhado...`);
+      console.log(`[INIT] Firebase DB disponível: ${!!db}`);
       const firebaseData = await loadFromFirebase();
 
       if (firebaseData) {
         console.log(`[INIT ${new Date().toISOString()}] ✅ Dados carregados do Firebase (workspace compartilhado)!`);
+        console.log(`[INIT] ${firebaseData.tasks?.length || 0} tarefas, ${firebaseData.reminders?.length || 0} lembretes, ${firebaseData.goals?.length || 0} metas`);
         isSyncingFromFirebase.current = true; // Ativa flag para prevenir loop
         setTasks(firebaseData.tasks);
         setReminders(firebaseData.reminders);
         setGoals(firebaseData.goals);
         setGoalCompletions(firebaseData.goalCompletions);
+        lastSavedTimestamp.current = firebaseData.lastUpdated || 0;
         // Flag será resetada após timeout
         setTimeout(() => {
           isSyncingFromFirebase.current = false;
@@ -103,24 +108,33 @@ function App() {
 
     console.log(`[SYNC ${new Date().toISOString()}] 🔄 Configurando sincronização em tempo real do workspace...`);
     const unsubscribe = syncWithFirebase((data) => {
-      // Apenas atualiza se os dados vieram de outro dispositivo
-      if (data.lastUpdated && data.lastUpdated > lastSyncTime.current) {
-        console.log(`[SYNC ${new Date().toISOString()}] 📥 Dados atualizados de outro usuário/dispositivo!`);
+      // Detecta se é nossa própria atualização comparando timestamps
+      // Se data.lastUpdated é muito próximo do nosso lastSavedTimestamp, ignoramos
+      const isOwnUpdate = lastSavedTimestamp.current > 0 &&
+                         data.lastUpdated &&
+                         Math.abs(data.lastUpdated - lastSavedTimestamp.current) < 1000;
 
-        // Ativa flag para prevenir loop infinito
-        isSyncingFromFirebase.current = true;
-
-        setTasks(data.tasks);
-        setReminders(data.reminders);
-        setGoals(data.goals);
-        setGoalCompletions(data.goalCompletions);
-        lastSyncTime.current = Date.now();
-
-        // Reseta flag após atualização
-        setTimeout(() => {
-          isSyncingFromFirebase.current = false;
-        }, 100);
+      if (isOwnUpdate) {
+        console.log(`[SYNC ${new Date().toISOString()}] ⏭️ Pulando (dados do próprio dispositivo)`);
+        return;
       }
+
+      console.log(`[SYNC ${new Date().toISOString()}] 📥 Dados recebidos de outro dispositivo!`);
+      console.log(`[SYNC] Firebase lastUpdated: ${data.lastUpdated}, Local lastSaved: ${lastSavedTimestamp.current}`);
+
+      // Ativa flag para prevenir loop infinito
+      isSyncingFromFirebase.current = true;
+
+      setTasks(data.tasks);
+      setReminders(data.reminders);
+      setGoals(data.goals);
+      setGoalCompletions(data.goalCompletions);
+      lastSyncTime.current = data.lastUpdated || Date.now();
+
+      // Reseta flag após atualização
+      setTimeout(() => {
+        isSyncingFromFirebase.current = false;
+      }, 100);
     });
 
     return () => {
@@ -154,7 +168,8 @@ function App() {
     }
 
     syncTimeoutRef.current = setTimeout(async () => {
-      console.log(`[SAVE ${new Date().toISOString()}] 💾 Salvando no Firebase...`);
+      const timestamp = Date.now();
+      console.log(`[SAVE ${new Date().toISOString()}] 💾 Salvando no Firebase (timestamp: ${timestamp})...`);
       setIsSyncing(true);
       setFirebaseError(null); // Limpa erro anterior
 
@@ -163,13 +178,16 @@ function App() {
         reminders,
         goals,
         goalCompletions,
-        lastUpdated: Date.now(),
+        lastUpdated: timestamp,
       };
+
+      // Marca o timestamp ANTES de salvar para comparação posterior
+      lastSavedTimestamp.current = timestamp;
 
       try {
         const success = await saveToFirebase(userData);
         if (success) {
-          lastSyncTime.current = Date.now();
+          lastSyncTime.current = timestamp;
           console.log(`[SAVE ${new Date().toISOString()}] ✅ Salvo com sucesso!`);
           setFirebaseError(null); // Limpa qualquer erro anterior
         } else {
