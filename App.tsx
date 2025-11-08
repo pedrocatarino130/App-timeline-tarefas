@@ -10,6 +10,7 @@ import {
   loadFromFirebase,
   syncWithFirebase,
   UserData,
+  getDeviceId,
 } from './services/syncService';
 import { db } from './firebase.config';
 
@@ -106,13 +107,11 @@ function App() {
   useEffect(() => {
     if (!isLoaded) return;
 
+    const currentDeviceId = getDeviceId();
     console.log(`[SYNC ${new Date().toISOString()}] 🔄 Configurando sincronização em tempo real do workspace...`);
     const unsubscribe = syncWithFirebase((data) => {
-      // Detecta se é nossa própria atualização comparando timestamps
-      // Se data.lastUpdated é muito próximo do nosso lastSavedTimestamp, ignoramos
-      const isOwnUpdate = lastSavedTimestamp.current > 0 &&
-                         data.lastUpdated &&
-                         Math.abs(data.lastUpdated - lastSavedTimestamp.current) < 1000;
+      // Detecta se é nossa própria atualização comparando deviceIds
+      const isOwnUpdate = data.lastDeviceId && data.lastDeviceId === currentDeviceId;
 
       if (isOwnUpdate) {
         console.log(`[SYNC ${new Date().toISOString()}] ⏭️ Pulando (dados do próprio dispositivo)`);
@@ -120,7 +119,7 @@ function App() {
       }
 
       console.log(`[SYNC ${new Date().toISOString()}] 📥 Dados recebidos de outro dispositivo!`);
-      console.log(`[SYNC] Firebase lastUpdated: ${data.lastUpdated}, Local lastSaved: ${lastSavedTimestamp.current}`);
+      console.log(`[SYNC] Device remoto: ${data.lastDeviceId}, Device local: ${currentDeviceId}`);
 
       // Ativa flag para prevenir loop infinito
       isSyncingFromFirebase.current = true;

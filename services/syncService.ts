@@ -16,11 +16,28 @@ export const STORAGE_KEYS = {
   REMINDERS: 'pet_hotel_reminders',
   GOALS: 'pet_hotel_goals',
   GOAL_COMPLETIONS: 'pet_hotel_goal_completions',
+  DEVICE_ID: 'pet_hotel_device_id',
 } as const;
 
 // ID do workspace compartilhado - TODOS os usuários usam o mesmo workspace
 // Isso permite que Pedro e Sato vejam e compartilhem os mesmos dados
 export const WORKSPACE_ID = 'casa_satos';
+
+// Gera ou recupera um ID único para este dispositivo
+export const getDeviceId = (): string => {
+  let deviceId = localStorage.getItem(STORAGE_KEYS.DEVICE_ID);
+
+  if (!deviceId) {
+    // Gera um ID único: timestamp + random
+    deviceId = `device_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
+    localStorage.setItem(STORAGE_KEYS.DEVICE_ID, deviceId);
+    console.log(`🆔 [DEVICE] Novo ID gerado: ${deviceId}`);
+  } else {
+    console.log(`🆔 [DEVICE] ID recuperado: ${deviceId}`);
+  }
+
+  return deviceId;
+};
 
 // Interface para os dados do usuário
 export interface UserData {
@@ -29,6 +46,7 @@ export interface UserData {
   goals: Goal[];
   goalCompletions: GoalCompletion[];
   lastUpdated: number;
+  lastDeviceId?: string; // ID do dispositivo que fez a última atualização
 }
 
 // Carrega dados do localStorage
@@ -103,7 +121,8 @@ export const saveToFirebase = async (
   }
 
   try {
-    console.log(`🔧 [SYNC] Salvando dados no workspace: ${WORKSPACE_ID}`);
+    const deviceId = getDeviceId();
+    console.log(`🔧 [SYNC] Salvando dados no workspace: ${WORKSPACE_ID} (device: ${deviceId})`);
     const workspaceDocRef = doc(db, 'workspaces', WORKSPACE_ID);
 
     await runTransaction(db, async (transaction) => {
@@ -115,6 +134,7 @@ export const saveToFirebase = async (
         transaction.set(workspaceDocRef, {
           ...data,
           lastUpdated: Date.now(),
+          lastDeviceId: deviceId,
         });
       } else {
         console.log('🔄 [SYNC] Documento existe, fazendo merge...');
@@ -127,6 +147,7 @@ export const saveToFirebase = async (
           goals: mergeArraysById(existingData.goals || [], data.goals),
           goalCompletions: mergeArraysById(existingData.goalCompletions || [], data.goalCompletions),
           lastUpdated: Date.now(),
+          lastDeviceId: deviceId,
         };
 
         transaction.set(workspaceDocRef, mergedData);
@@ -168,7 +189,7 @@ export const loadFromFirebase = async (): Promise<UserData | null> => {
 
     if (docSnap.exists()) {
       const data = docSnap.data() as UserData;
-      console.log(`✅ [SYNC] Dados carregados! (${data.tasks?.length || 0} tarefas, ${data.reminders?.length || 0} lembretes)`);
+      console.log(`✅ [SYNC] Dados carregados! (${data.tasks?.length || 0} tarefas, ${data.reminders?.length || 0} lembretes, device: ${data.lastDeviceId || 'unknown'})`);
 
       // Reconverte timestamps para objetos Date
       return {
@@ -186,6 +207,7 @@ export const loadFromFirebase = async (): Promise<UserData | null> => {
         })),
         goalCompletions: data.goalCompletions,
         lastUpdated: data.lastUpdated,
+        lastDeviceId: data.lastDeviceId,
       };
     }
 
@@ -224,7 +246,7 @@ export const syncWithFirebase = (
       if (doc.exists()) {
         const data = doc.data() as UserData;
 
-        console.log(`[SYNC ${new Date().toISOString()}] 📥 Dados recebidos do Firebase (${data.tasks?.length || 0} tarefas, ${data.reminders?.length || 0} lembretes)`);
+        console.log(`[SYNC ${new Date().toISOString()}] 📥 Dados recebidos do Firebase (${data.tasks?.length || 0} tarefas, ${data.reminders?.length || 0} lembretes, device: ${data.lastDeviceId || 'unknown'})`);
 
         // Reconverte timestamps para objetos Date
         const convertedData: UserData = {
@@ -242,6 +264,7 @@ export const syncWithFirebase = (
           })),
           goalCompletions: data.goalCompletions,
           lastUpdated: data.lastUpdated,
+          lastDeviceId: data.lastDeviceId,
         };
 
         onDataChange(convertedData);
