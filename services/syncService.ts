@@ -114,10 +114,16 @@ const mergeArraysById = <T extends { id: string }>(
 // Salva todos os dados no Firebase (workspace compartilhado) usando transação
 export const saveToFirebase = async (
   data: UserData
-): Promise<boolean> => {
+): Promise<{ success: boolean; error?: string }> => {
   if (!db) {
-    console.warn('⚠️ [SYNC] Firebase não está configurado. Usando apenas localStorage.');
-    return false;
+    const errorMsg = '⚠️ Firebase não inicializado. Verifique as credenciais no console.';
+    console.error(`[SYNC] ${errorMsg}`);
+    console.error('[SYNC] Possíveis causas:');
+    console.error('   1. Credenciais do Firebase inválidas ou ausentes');
+    console.error('   2. Projeto Firebase não existe ou foi deletado');
+    console.error('   3. Erro de rede ao conectar com Firebase');
+    console.error('   4. Verifique o console do navegador para mais detalhes');
+    return { success: false, error: errorMsg };
   }
 
   try {
@@ -155,23 +161,40 @@ export const saveToFirebase = async (
     });
 
     console.log('✅ [SYNC] Dados salvos no Firebase com sucesso!');
-    return true;
+    return { success: true };
   } catch (error: any) {
     console.error('❌ [SYNC] Erro ao salvar no Firebase:', error);
 
     // Diagnóstico de erros específicos
+    let errorMsg = 'Erro desconhecido ao sincronizar';
+
     if (error.code === 'permission-denied') {
+      errorMsg = '🚨 PERMISSÃO NEGADA! Configure as regras do Firestore no Firebase Console';
       console.error('🚨 [SYNC] ERRO DE PERMISSÃO!');
       console.error('💡 [SYNC] Solução: Configure as regras do Firestore no Firebase Console');
-      console.error('💡 [SYNC] Vá em: Firestore Database → Regras → Cole as regras → Publicar');
+      console.error('💡 [SYNC] Vá em: Firestore Database → Regras → Cole as regras abaixo → Publicar');
+      console.error('');
+      console.error('rules_version = "2";');
+      console.error('service cloud.firestore {');
+      console.error('  match /databases/{database}/documents {');
+      console.error('    match /workspaces/{workspace} {');
+      console.error('      allow read, write: if true;');
+      console.error('    }');
+      console.error('  }');
+      console.error('}');
     } else if (error.code === 'unavailable') {
+      errorMsg = '⚠️ Firebase indisponível. Verifique sua conexão com a internet.';
       console.error('🚨 [SYNC] Firebase está indisponível (sem internet ou serviço offline)');
+    } else if (error.code === 'unauthenticated') {
+      errorMsg = '🔐 Autenticação necessária. Configure a autenticação no Firebase.';
+      console.error('🚨 [SYNC] Erro de autenticação');
     } else {
+      errorMsg = `Erro: ${error.code || error.message}`;
       console.error('🚨 [SYNC] Código do erro:', error.code);
       console.error('🚨 [SYNC] Mensagem:', error.message);
     }
 
-    return false;
+    return { success: false, error: errorMsg };
   }
 };
 

@@ -183,27 +183,17 @@ function App() {
       // Marca o timestamp ANTES de salvar para comparação posterior
       lastSavedTimestamp.current = timestamp;
 
-      try {
-        const success = await saveToFirebase(userData);
-        if (success) {
-          lastSyncTime.current = timestamp;
-          console.log(`[SAVE ${new Date().toISOString()}] ✅ Salvo com sucesso!`);
-          setFirebaseError(null); // Limpa qualquer erro anterior
-        } else {
-          // Se retornou false, houve algum problema
-          setFirebaseError('Erro ao sincronizar com Firebase. Dados salvos localmente.');
-        }
-      } catch (error: any) {
-        console.error('[SAVE] Exceção capturada:', error);
+      const result = await saveToFirebase(userData);
 
-        // Mostra erro específico na tela
-        if (error.code === 'permission-denied') {
-          setFirebaseError('🚨 ERRO: Regras do Firestore não configuradas! Vá no Firebase Console → Firestore → Regras → Publicar');
-        } else if (error.code === 'unavailable') {
-          setFirebaseError('⚠️ Firebase indisponível. Tentando novamente...');
-        } else {
-          setFirebaseError(`Erro Firebase: ${error.code || error.message}`);
-        }
+      if (result.success) {
+        lastSyncTime.current = timestamp;
+        console.log(`[SAVE ${new Date().toISOString()}] ✅ Salvo com sucesso!`);
+        setFirebaseError(null); // Limpa qualquer erro anterior
+      } else {
+        // Se falhou, mostra o erro específico retornado
+        const errorMessage = result.error || 'Erro ao sincronizar com Firebase. Dados salvos localmente.';
+        console.error(`[SAVE ${new Date().toISOString()}] ❌ Falha:`, errorMessage);
+        setFirebaseError(errorMessage);
       }
 
       setIsSyncing(false);
