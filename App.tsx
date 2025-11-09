@@ -50,7 +50,8 @@ function App() {
   const lastSyncTime = useRef(0);
   const syncTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const isSyncingFromFirebase = useRef(false); // Flag anti-loop
-  const lastSavedTimestamp = useRef(0); // Timestamp do último save local
+  const lastLocalChangeTimestamp = useRef(0); // 🔥 FIX: Timestamp da última mudança LOCAL
+  const pendingSaveTimestamp = useRef(0); // 🔥 FIX: Timestamp do save pendente
 
   // Detector de online/offline
   useEffect(() => {
@@ -94,11 +95,11 @@ function App() {
         setReminders(firebaseData.reminders);
         setGoals(firebaseData.goals);
         setGoalCompletions(firebaseData.goalCompletions);
-        lastSavedTimestamp.current = firebaseData.lastUpdated || 0;
-        // Flag será resetada após timeout
+        lastLocalChangeTimestamp.current = firebaseData.lastUpdated || 0; // 🔥 FIX: Marca quando foi a última atualização
+        // Flag será resetada após timeout de 1 segundo para cobrir debounce completo
         setTimeout(() => {
           isSyncingFromFirebase.current = false;
-        }, 100);
+        }, 1000); // 🔥 FIX: Aumentado de 100ms para 1000ms
       } else {
         console.log(`[INIT ${new Date().toISOString()}] 📦 Usando dados do localStorage`);
       }
@@ -116,14 +117,31 @@ function App() {
     const currentDeviceId = getDeviceId();
     console.log(`[SYNC ${new Date().toISOString()}] 🔄 Configurando sincronização em tempo real do workspace...`);
     const unsubscribe = syncWithFirebase((data) => {
-      // 🔥 FIX CRÍTICO: SEMPRE aplicar dados do Firebase, pois após merge ele é a fonte da verdade
-      // A flag isSyncingFromFirebase já previne loop infinito de saves
-
       const isOwnUpdate = data.lastDeviceId && data.lastDeviceId === currentDeviceId;
       const source = isOwnUpdate ? 'próprio dispositivo (após merge)' : `outro dispositivo (${data.lastDeviceId})`;
+      const firebaseTimestamp = data.lastUpdated || 0;
 
       console.log(`[SYNC ${new Date().toISOString()}] 📥 Dados recebidos de ${source}`);
       console.log(`[SYNC] Device: ${data.lastDeviceId} | Local: ${currentDeviceId}`);
+      console.log(`[SYNC] 🕒 Timestamps - Firebase: ${firebaseTimestamp}, Local: ${lastLocalChangeTimestamp.current}, Pendente: ${pendingSaveTimestamp.current}`);
+
+      // 🔥 FIX CRÍTICO: SÓ aplica dados do Firebase se forem mais recentes que a última mudança local
+      // OU se não houver mudanças locais pendentes
+      const hasLocalChanges = pendingSaveTimestamp.current > 0 && pendingSaveTimestamp.current > firebaseTimestamp;
+      const isOlderThanLocal = firebaseTimestamp < lastLocalChangeTimestamp.current;
+
+      if (hasLocalChanges) {
+        console.log(`[SYNC ${new Date().toISOString()}] ⏭️  IGNORANDO dados do Firebase - há mudanças locais mais recentes pendentes de save`);
+        console.log(`[SYNC] Pendente: ${pendingSaveTimestamp.current} > Firebase: ${firebaseTimestamp}`);
+        return; // 🔥 NÃO sobrescreve mudanças locais!
+      }
+
+      if (isOlderThanLocal && !isOwnUpdate) {
+        console.log(`[SYNC ${new Date().toISOString()}] ⏭️  IGNORANDO dados do Firebase - são mais antigos que mudanças locais`);
+        console.log(`[SYNC] Local: ${lastLocalChangeTimestamp.current} > Firebase: ${firebaseTimestamp}`);
+        return; // 🔥 NÃO sobrescreve com dados antigos!
+      }
+
       console.log(`[SYNC] 📊 Aplicando ao estado: ${data.tasks.length} tarefas, ${data.reminders.length} lembretes, ${data.goals.length} metas, ${data.goalCompletions.length} conclusões`);
 
       // Log detalhado das metas
@@ -138,12 +156,19 @@ function App() {
       setReminders(data.reminders);
       setGoals(data.goals);
       setGoalCompletions(data.goalCompletions);
-      lastSyncTime.current = data.lastUpdated || Date.now();
+      lastSyncTime.current = firebaseTimestamp;
+      lastLocalChangeTimestamp.current = firebaseTimestamp; // 🔥 FIX: Atualiza timestamp local
 
-      // Reseta flag após atualização
+      // 🔥 FIX: Limpa timestamp de save pendente (já foi sincronizado)
+      if (isOwnUpdate) {
+        pendingSaveTimestamp.current = 0;
+        console.log(`[SYNC ${new Date().toISOString()}] ✅ Save confirmado - limpando pendência`);
+      }
+
+      // Reseta flag após atualização - AUMENTADO para 1 segundo
       setTimeout(() => {
         isSyncingFromFirebase.current = false;
-      }, 100);
+      }, 1000); // 🔥 FIX: Aumentado de 100ms para 1000ms para cobrir debounce completo
     });
 
     return () => {
@@ -165,6 +190,11 @@ function App() {
       return;
     }
 
+    // 🔥 FIX: Marca timestamp de mudança LOCAL imediatamente
+    const changeTimestamp = Date.now();
+    lastLocalChangeTimestamp.current = changeTimestamp;
+    console.log(`[SAVE ${new Date().toISOString()}] 🔄 Mudança local detectada (timestamp: ${changeTimestamp})`);
+
     // Salva no localStorage imediatamente
     saveToLocalStorage(STORAGE_KEYS.TASKS, tasks);
     saveToLocalStorage(STORAGE_KEYS.REMINDERS, reminders);
@@ -178,7 +208,9 @@ function App() {
 
     syncTimeoutRef.current = setTimeout(async () => {
       const timestamp = Date.now();
+      pendingSaveTimestamp.current = timestamp; // 🔥 FIX: Marca que há um save pendente
       console.log(`[SAVE ${new Date().toISOString()}] 💾 Salvando no Firebase (timestamp: ${timestamp})...`);
+      console.log(`[SAVE] 📊 ${tasks.length} tarefas, ${reminders.length} lembretes, ${goals.length} metas, ${goalCompletions.length} conclusões`);
       setIsSyncing(true);
       setFirebaseError(null); // Limpa erro anterior
 
@@ -190,20 +222,19 @@ function App() {
         lastUpdated: timestamp,
       };
 
-      // Marca o timestamp ANTES de salvar para comparação posterior
-      lastSavedTimestamp.current = timestamp;
-
       const result = await saveToFirebase(userData);
 
       if (result.success) {
         lastSyncTime.current = timestamp;
         console.log(`[SAVE ${new Date().toISOString()}] ✅ Salvo com sucesso!`);
         setFirebaseError(null); // Limpa qualquer erro anterior
+        // 🔥 FIX: NÃO limpa pendingSaveTimestamp aqui - será limpo quando o listener confirmar
       } else {
         // Se falhou, mostra o erro específico retornado
         const errorMessage = result.error || 'Erro ao sincronizar com Firebase. Dados salvos localmente.';
         console.error(`[SAVE ${new Date().toISOString()}] ❌ Falha:`, errorMessage);
         setFirebaseError(errorMessage);
+        pendingSaveTimestamp.current = 0; // 🔥 FIX: Limpa pendência se falhou
       }
 
       setIsSyncing(false);
