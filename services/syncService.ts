@@ -170,7 +170,12 @@ export const saveToFirebase = async (
 
     // Sanitiza dados para garantir que não há datas inválidas
     const sanitizedData = sanitizeData(data);
-    console.log(`🧹 [SYNC] Dados sanitizados (${sanitizedData.tasks.length} tarefas, ${sanitizedData.reminders.length} lembretes)`);
+    console.log(`🧹 [SYNC] Dados sanitizados: ${sanitizedData.tasks.length} tarefas, ${sanitizedData.reminders.length} lembretes, ${sanitizedData.goals.length} metas, ${sanitizedData.goalCompletions.length} conclusões`);
+
+    // Log detalhado das metas para debug
+    if (sanitizedData.goals.length > 0) {
+      console.log(`📋 [SYNC] Metas a salvar:`, sanitizedData.goals.map(g => ({ id: g.id, desc: g.description.substring(0, 30) })));
+    }
 
     const workspaceDocRef = doc(db, 'workspaces', WORKSPACE_ID);
 
@@ -282,7 +287,12 @@ export const loadFromFirebase = async (): Promise<UserData | null> => {
 
     if (docSnap.exists()) {
       const data = docSnap.data() as UserData;
-      console.log(`✅ [SYNC] Dados carregados! (${data.tasks?.length || 0} tarefas, ${data.reminders?.length || 0} lembretes, device: ${data.lastDeviceId || 'unknown'})`);
+      console.log(`✅ [SYNC] Dados carregados do Firebase: ${data.tasks?.length || 0} tarefas, ${data.reminders?.length || 0} lembretes, ${data.goals?.length || 0} metas, ${data.goalCompletions?.length || 0} conclusões (device: ${data.lastDeviceId || 'unknown'})`);
+
+      // Log detalhado das metas para debug
+      if (data.goals && data.goals.length > 0) {
+        console.log(`📋 [SYNC] Metas carregadas:`, data.goals.map(g => ({ id: g.id, desc: g.description?.substring(0, 30) })));
+      }
 
       // Reconverte timestamps para objetos Date
       return {
@@ -339,7 +349,12 @@ export const syncWithFirebase = (
       if (doc.exists()) {
         const data = doc.data() as UserData;
 
-        console.log(`[SYNC ${new Date().toISOString()}] 📥 Dados recebidos do Firebase (${data.tasks?.length || 0} tarefas, ${data.reminders?.length || 0} lembretes, device: ${data.lastDeviceId || 'unknown'})`);
+        console.log(`[SYNC ${new Date().toISOString()}] 📥 Dados recebidos do Firebase: ${data.tasks?.length || 0} tarefas, ${data.reminders?.length || 0} lembretes, ${data.goals?.length || 0} metas, ${data.goalCompletions?.length || 0} conclusões (device: ${data.lastDeviceId || 'unknown'})`);
+
+        // Log detalhado das metas para debug
+        if (data.goals && data.goals.length > 0) {
+          console.log(`📋 [SYNC] Metas recebidas via listener:`, data.goals.map(g => ({ id: g.id, desc: g.description?.substring(0, 30) })));
+        }
 
         // Reconverte timestamps para objetos Date
         const convertedData: UserData = {
