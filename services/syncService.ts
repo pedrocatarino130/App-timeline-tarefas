@@ -49,6 +49,11 @@ export interface UserData {
   lastDeviceId?: string; // ID do dispositivo que fez a última atualização
 }
 
+// Função helper para validar se um Date é válido
+const isValidDate = (date: any): boolean => {
+  return date instanceof Date && !isNaN(date.getTime());
+};
+
 // Carrega dados do localStorage
 export const loadFromLocalStorage = <T>(key: string, defaultValue: T): T => {
   try {
@@ -57,31 +62,41 @@ export const loadFromLocalStorage = <T>(key: string, defaultValue: T): T => {
 
     const parsed = JSON.parse(item);
 
-    // Reconverte strings de data para objetos Date
+    // Reconverte strings de data para objetos Date e valida
     if (key === STORAGE_KEYS.TASKS) {
-      return (parsed as Task[]).map((task: Task) => ({
-        ...task,
-        timestamp: new Date(task.timestamp),
-      })) as T;
+      return (parsed as Task[]).map((task: Task) => {
+        const timestamp = new Date(task.timestamp);
+        return {
+          ...task,
+          timestamp: isValidDate(timestamp) ? timestamp : new Date(),
+        };
+      }) as T;
     }
 
     if (key === STORAGE_KEYS.REMINDERS) {
-      return (parsed as Reminder[]).map((reminder: Reminder) => ({
-        ...reminder,
-        timestamp: new Date(reminder.timestamp),
-      })) as T;
+      return (parsed as Reminder[]).map((reminder: Reminder) => {
+        const timestamp = new Date(reminder.timestamp);
+        return {
+          ...reminder,
+          timestamp: isValidDate(timestamp) ? timestamp : new Date(),
+        };
+      }) as T;
     }
 
     if (key === STORAGE_KEYS.GOALS) {
-      return (parsed as Goal[]).map((goal: Goal) => ({
-        ...goal,
-        createdAt: new Date(goal.createdAt),
-      })) as T;
+      return (parsed as Goal[]).map((goal: Goal) => {
+        const createdAt = new Date(goal.createdAt);
+        return {
+          ...goal,
+          createdAt: isValidDate(createdAt) ? createdAt : new Date(),
+        };
+      }) as T;
     }
 
     return parsed as T;
   } catch (error) {
-    console.error(`Erro ao carregar ${key} do localStorage:`, error);
+    console.error(`❌ Erro ao carregar ${key} do localStorage:`, error);
+    console.warn(`⚠️ Usando valores padrão para ${key}`);
     return defaultValue;
   }
 };
@@ -93,6 +108,29 @@ export const saveToLocalStorage = <T>(key: string, data: T): void => {
   } catch (error) {
     console.error(`Erro ao salvar ${key} no localStorage:`, error);
   }
+};
+
+// Função helper para sanitizar objetos com datas inválidas
+const sanitizeData = (data: UserData): UserData => {
+  const now = new Date();
+
+  return {
+    tasks: data.tasks.map(task => ({
+      ...task,
+      timestamp: isValidDate(task.timestamp) ? task.timestamp : now,
+    })),
+    reminders: data.reminders.map(reminder => ({
+      ...reminder,
+      timestamp: isValidDate(reminder.timestamp) ? reminder.timestamp : now,
+    })),
+    goals: data.goals.map(goal => ({
+      ...goal,
+      createdAt: isValidDate(goal.createdAt) ? goal.createdAt : now,
+    })),
+    goalCompletions: data.goalCompletions,
+    lastUpdated: data.lastUpdated,
+    lastDeviceId: data.lastDeviceId,
+  };
 };
 
 // Função helper para fazer merge de arrays por ID (previne perda de dados)
@@ -129,6 +167,11 @@ export const saveToFirebase = async (
   try {
     const deviceId = getDeviceId();
     console.log(`🔧 [SYNC] Salvando dados no workspace: ${WORKSPACE_ID} (device: ${deviceId})`);
+
+    // Sanitiza dados para garantir que não há datas inválidas
+    const sanitizedData = sanitizeData(data);
+    console.log(`🧹 [SYNC] Dados sanitizados (${sanitizedData.tasks.length} tarefas, ${sanitizedData.reminders.length} lembretes)`);
+
     const workspaceDocRef = doc(db, 'workspaces', WORKSPACE_ID);
 
     await runTransaction(db, async (transaction) => {
@@ -138,7 +181,7 @@ export const saveToFirebase = async (
         console.log('📝 [SYNC] Documento não existe, criando novo...');
         // Se documento não existe, cria um novo
         transaction.set(workspaceDocRef, {
-          ...data,
+          ...sanitizedData,
           lastUpdated: Date.now(),
           lastDeviceId: deviceId,
         });
@@ -148,10 +191,10 @@ export const saveToFirebase = async (
         const existingData = docSnapshot.data() as UserData;
 
         const mergedData: UserData = {
-          tasks: mergeArraysById(existingData.tasks || [], data.tasks),
-          reminders: mergeArraysById(existingData.reminders || [], data.reminders),
-          goals: mergeArraysById(existingData.goals || [], data.goals),
-          goalCompletions: mergeArraysById(existingData.goalCompletions || [], data.goalCompletions),
+          tasks: mergeArraysById(existingData.tasks || [], sanitizedData.tasks),
+          reminders: mergeArraysById(existingData.reminders || [], sanitizedData.reminders),
+          goals: mergeArraysById(existingData.goals || [], sanitizedData.goals),
+          goalCompletions: mergeArraysById(existingData.goalCompletions || [], sanitizedData.goalCompletions),
           lastUpdated: Date.now(),
           lastDeviceId: deviceId,
         };
@@ -168,7 +211,33 @@ export const saveToFirebase = async (
     // Diagnóstico de erros específicos
     let errorMsg = 'Erro desconhecido ao sincronizar';
 
-    if (error.code === 'permission-denied') {
+    if (error instanceof RangeError && error.message.includes('Invalid time value')) {
+      errorMsg = '🕒 Dados com datas inválidas detectados. Limpando localStorage...';
+      console.error('🚨 [SYNC] ERRO: Datas inválidas nos dados!');
+      console.error('💡 [SYNC] Solução: Limpe o localStorage e recarregue a página');
+      console.error('💡 [SYNC] Execute no console: localStorage.clear(); location.reload();');
+
+      // Tenta identificar qual dado está com problema
+      try {
+        data.tasks.forEach((task, idx) => {
+          if (!isValidDate(task.timestamp)) {
+            console.error(`⚠️ [SYNC] Tarefa #${idx} (${task.id}) tem timestamp inválido:`, task.timestamp);
+          }
+        });
+        data.reminders.forEach((reminder, idx) => {
+          if (!isValidDate(reminder.timestamp)) {
+            console.error(`⚠️ [SYNC] Lembrete #${idx} (${reminder.id}) tem timestamp inválido:`, reminder.timestamp);
+          }
+        });
+        data.goals.forEach((goal, idx) => {
+          if (!isValidDate(goal.createdAt)) {
+            console.error(`⚠️ [SYNC] Meta #${idx} (${goal.id}) tem createdAt inválido:`, goal.createdAt);
+          }
+        });
+      } catch (diagError) {
+        console.error('❌ [SYNC] Erro ao diagnosticar dados:', diagError);
+      }
+    } else if (error.code === 'permission-denied') {
       errorMsg = '🚨 PERMISSÃO NEGADA! Configure as regras do Firestore no Firebase Console';
       console.error('🚨 [SYNC] ERRO DE PERMISSÃO!');
       console.error('💡 [SYNC] Solução: Configure as regras do Firestore no Firebase Console');
@@ -192,6 +261,7 @@ export const saveToFirebase = async (
       errorMsg = `Erro: ${error.code || error.message}`;
       console.error('🚨 [SYNC] Código do erro:', error.code);
       console.error('🚨 [SYNC] Mensagem:', error.message);
+      console.error('🚨 [SYNC] Stack:', error.stack);
     }
 
     return { success: false, error: errorMsg };
