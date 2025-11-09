@@ -116,16 +116,14 @@ function App() {
     const currentDeviceId = getDeviceId();
     console.log(`[SYNC ${new Date().toISOString()}] 🔄 Configurando sincronização em tempo real do workspace...`);
     const unsubscribe = syncWithFirebase((data) => {
-      // Detecta se é nossa própria atualização comparando deviceIds
+      // 🔥 FIX CRÍTICO: SEMPRE aplicar dados do Firebase, pois após merge ele é a fonte da verdade
+      // A flag isSyncingFromFirebase já previne loop infinito de saves
+
       const isOwnUpdate = data.lastDeviceId && data.lastDeviceId === currentDeviceId;
+      const source = isOwnUpdate ? 'próprio dispositivo (após merge)' : `outro dispositivo (${data.lastDeviceId})`;
 
-      if (isOwnUpdate) {
-        console.log(`[SYNC ${new Date().toISOString()}] ⏭️ Pulando (dados do próprio dispositivo)`);
-        return;
-      }
-
-      console.log(`[SYNC ${new Date().toISOString()}] 📥 Dados recebidos de outro dispositivo!`);
-      console.log(`[SYNC] Device remoto: ${data.lastDeviceId}, Device local: ${currentDeviceId}`);
+      console.log(`[SYNC ${new Date().toISOString()}] 📥 Dados recebidos de ${source}`);
+      console.log(`[SYNC] Device: ${data.lastDeviceId} | Local: ${currentDeviceId}`);
       console.log(`[SYNC] 📊 Aplicando ao estado: ${data.tasks.length} tarefas, ${data.reminders.length} lembretes, ${data.goals.length} metas, ${data.goalCompletions.length} conclusões`);
 
       // Log detalhado das metas
