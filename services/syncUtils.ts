@@ -22,6 +22,12 @@ export const hashData = (data: {
   goals: Goal[];
   goalCompletions: GoalCompletion[];
 }): string => {
+  // 🔥 FIX: Valida arrays antes de processar
+  const safeTasks = Array.isArray(data.tasks) ? data.tasks : [];
+  const safeReminders = Array.isArray(data.reminders) ? data.reminders : [];
+  const safeGoals = Array.isArray(data.goals) ? data.goals : [];
+  const safeGoalCompletions = Array.isArray(data.goalCompletions) ? data.goalCompletions : [];
+
   // Cria uma string estável dos dados (sem depender de ordem de propriedades)
   const normalize = (obj: any): string => {
     // Remove _updatedAt para não causar loops (é metadado interno)
@@ -39,13 +45,17 @@ export const hashData = (data: {
     return JSON.stringify(normalized);
   };
 
-  const tasksStr = data.tasks.map(normalize).sort().join('|');
-  const remindersStr = data.reminders.map(normalize).sort().join('|');
-  const goalsStr = data.goals.map(normalize).sort().join('|');
-  const completionsStr = data.goalCompletions.map(normalize).sort().join('|');
+  const tasksStr = safeTasks.map(normalize).sort().join('|');
+  const remindersStr = safeReminders.map(normalize).sort().join('|');
+  const goalsStr = safeGoals.map(normalize).sort().join('|');
+  const completionsStr = safeGoalCompletions.map(normalize).sort().join('|');
+
+  // 🔥 FIX: Inclui comprimento dos arrays para garantir que deleções sejam detectadas
+  // Isso previne o caso raro onde deletar 1 item e adicionar outro poderia gerar o mesmo hash
+  const lengthStr = `[${safeTasks.length},${safeReminders.length},${safeGoals.length},${safeGoalCompletions.length}]`;
 
   // Hash simples mas eficaz (FNV-1a)
-  const str = `${tasksStr}::${remindersStr}::${goalsStr}::${completionsStr}`;
+  const str = `${lengthStr}::${tasksStr}::${remindersStr}::${goalsStr}::${completionsStr}`;
   let hash = 2166136261;
   for (let i = 0; i < str.length; i++) {
     hash ^= str.charCodeAt(i);
@@ -71,18 +81,35 @@ export const hashData = (data: {
  * @returns Array com merge inteligente
  */
 export const mergeLWW = <T extends { id: string; _updatedAt?: number }>(
-  existingArray: T[],
-  newArray: T[]
+  existingArray: T[] | undefined | null,
+  newArray: T[] | undefined | null
 ): T[] => {
+  // 🔥 FIX: Valida arrays para prevenir crashes com undefined/null
+  const safeExisting = Array.isArray(existingArray) ? existingArray : [];
+  const safeNew = Array.isArray(newArray) ? newArray : [];
+
+  console.log(`[MERGE] Merging ${safeExisting.length} existing + ${safeNew.length} new items`);
+
   const merged = new Map<string, T>();
 
   // Adiciona itens existentes ao mapa
-  existingArray.forEach(item => {
-    merged.set(item.id, item);
+  safeExisting.forEach(item => {
+    // 🔥 FIX: Valida que o item tem ID válido
+    if (item && item.id) {
+      merged.set(item.id, item);
+    } else {
+      console.warn('[MERGE] Item sem ID detectado no array existente:', item);
+    }
   });
 
   // Para cada item novo, verifica se é mais recente
-  newArray.forEach(newItem => {
+  safeNew.forEach(newItem => {
+    // 🔥 FIX: Valida que o item tem ID válido
+    if (!newItem || !newItem.id) {
+      console.warn('[MERGE] Item sem ID detectado no array novo:', newItem);
+      return;
+    }
+
     const existing = merged.get(newItem.id);
 
     // Se não existe, adiciona
@@ -102,7 +129,9 @@ export const mergeLWW = <T extends { id: string; _updatedAt?: number }>(
     // Caso contrário, mantém o existente (mais recente)
   });
 
-  return Array.from(merged.values());
+  const result = Array.from(merged.values());
+  console.log(`[MERGE] Result: ${result.length} items after merge`);
+  return result;
 };
 
 /**
