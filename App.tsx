@@ -12,6 +12,7 @@ import {
   UserData,
   getDeviceId,
 } from './services/syncService';
+import { hashData, getAdaptiveDebounce } from './services/syncUtils';
 import { db } from './firebase.config';
 
 // Default initial data (used only if localStorage is empty)
@@ -52,6 +53,8 @@ function App() {
   const isSyncingFromFirebase = useRef(false); // Flag anti-loop
   const lastLocalChangeTimestamp = useRef(0); // 🔥 FIX: Timestamp da última mudança LOCAL
   const pendingSaveTimestamp = useRef(0); // 🔥 FIX: Timestamp do save pendente
+  const dataHashRef = useRef<string>(''); // 🔥 FIX #1: Hash dos dados para detectar mudanças REAIS
+  const changeCountRef = useRef(0); // 🔥 FIX #5: Contador de mudanças para debounce adaptativo
 
   // Detector de online/offline
   useEffect(() => {
@@ -159,6 +162,16 @@ function App() {
       lastSyncTime.current = firebaseTimestamp;
       lastLocalChangeTimestamp.current = firebaseTimestamp; // 🔥 FIX: Atualiza timestamp local
 
+      // 🔥 FIX #1: Atualiza hash para refletir dados do Firebase (previne loop)
+      const newHash = hashData({
+        tasks: data.tasks,
+        reminders: data.reminders,
+        goals: data.goals,
+        goalCompletions: data.goalCompletions,
+      });
+      dataHashRef.current = newHash;
+      console.log(`[SYNC] 🔑 Hash atualizado: ${newHash.substring(0, 8)}`);
+
       // 🔥 FIX: Limpa timestamp de save pendente (já foi sincronizado)
       if (isOwnUpdate) {
         pendingSaveTimestamp.current = 0;
@@ -179,7 +192,7 @@ function App() {
     };
   }, [isLoaded]);
 
-  // Salva no localStorage e Firebase com debounce
+  // 🔥 FIX #1 + #5: Salva no localStorage e Firebase com hash comparison e debounce adaptativo
   useEffect(() => {
     // Não salva se ainda não terminou de carregar
     if (!isLoaded) return;
@@ -190,10 +203,24 @@ function App() {
       return;
     }
 
+    // 🔥 FIX #1: Calcula hash dos dados atuais
+    const currentHash = hashData({ tasks, reminders, goals, goalCompletions });
+
+    // 🔥 FIX #1: SÓ salva se o hash mudou (mudança REAL)
+    if (currentHash === dataHashRef.current) {
+      console.log(`[SAVE ${new Date().toISOString()}] ⏭️ Hash não mudou, pulando save (previne loop)`);
+      return;
+    }
+
+    console.log(`[SAVE ${new Date().toISOString()}] 🔄 Hash mudou: ${dataHashRef.current.substring(0, 8)} → ${currentHash.substring(0, 8)}`);
+    dataHashRef.current = currentHash;
+
     // 🔥 FIX: Marca timestamp de mudança LOCAL imediatamente
     const changeTimestamp = Date.now();
     lastLocalChangeTimestamp.current = changeTimestamp;
-    console.log(`[SAVE ${new Date().toISOString()}] 🔄 Mudança local detectada (timestamp: ${changeTimestamp})`);
+    changeCountRef.current++; // Incrementa contador de mudanças
+
+    console.log(`[SAVE ${new Date().toISOString()}] 🔄 Mudança local detectada (timestamp: ${changeTimestamp}, count: ${changeCountRef.current})`);
 
     // Salva no localStorage imediatamente
     saveToLocalStorage(STORAGE_KEYS.TASKS, tasks);
@@ -201,7 +228,10 @@ function App() {
     saveToLocalStorage(STORAGE_KEYS.GOALS, goals);
     saveToLocalStorage(STORAGE_KEYS.GOAL_COMPLETIONS, goalCompletions);
 
-    // Salva no Firebase com debounce de 500ms
+    // 🔥 FIX #5: Debounce adaptativo baseado na frequência de mudanças
+    const debounceTime = getAdaptiveDebounce(changeCountRef.current);
+    console.log(`[SAVE] ⏱️ Debounce de ${debounceTime}ms (mudanças: ${changeCountRef.current})`);
+
     if (syncTimeoutRef.current) {
       clearTimeout(syncTimeoutRef.current);
     }
@@ -228,6 +258,7 @@ function App() {
         lastSyncTime.current = timestamp;
         console.log(`[SAVE ${new Date().toISOString()}] ✅ Salvo com sucesso!`);
         setFirebaseError(null); // Limpa qualquer erro anterior
+        changeCountRef.current = 0; // 🔥 FIX #5: Reseta contador após save bem-sucedido
         // 🔥 FIX: NÃO limpa pendingSaveTimestamp aqui - será limpo quando o listener confirmar
       } else {
         // Se falhou, mostra o erro específico retornado
@@ -235,17 +266,18 @@ function App() {
         console.error(`[SAVE ${new Date().toISOString()}] ❌ Falha:`, errorMessage);
         setFirebaseError(errorMessage);
         pendingSaveTimestamp.current = 0; // 🔥 FIX: Limpa pendência se falhou
+        changeCountRef.current = 0; // Reseta contador
       }
 
       setIsSyncing(false);
-    }, 500);
+    }, debounceTime);
 
     return () => {
       if (syncTimeoutRef.current) {
         clearTimeout(syncTimeoutRef.current);
       }
     };
-  }, [tasks, reminders, goals, goalCompletions]); // Removido isLoaded das dependências!
+  }, [tasks, reminders, goals, goalCompletions, isLoaded]);
 
   const handleLogin = (role: UserRole) => {
     setUserRole(role);
@@ -263,11 +295,13 @@ function App() {
       mediaUrl,
       mediaType,
       author: userRole || undefined, // Adiciona quem criou a tarefa
+      _updatedAt: Date.now(), // 🔥 FIX: Timestamp de criação para merge LWW
     };
     setTasks(prevTasks => [...prevTasks, newTask].sort((a, b) => a.timestamp.getTime() - b.timestamp.getTime()));
   }, [userRole]);
 
   const handleDeleteTask = useCallback((taskId: string) => {
+    // 🔥 FIX: Deletes também disparam mudança de hash, então serão sincronizados
     setTasks(prevTasks => prevTasks.filter(task => task.id !== taskId));
   }, []);
 
@@ -278,6 +312,7 @@ function App() {
       timestamp: new Date(),
       status: 'pending',
       author: userRole || undefined, // Adiciona quem criou o lembrete
+      _updatedAt: Date.now(), // 🔥 FIX: Timestamp de criação para merge LWW
     };
     setReminders(prevReminders => [...prevReminders, newReminder]);
   }, [userRole]);
@@ -289,7 +324,9 @@ function App() {
   const handleToggleReminderStatus = useCallback((reminderId: string) => {
     setReminders(prevReminders =>
       prevReminders.map(r =>
-        r.id === reminderId ? { ...r, status: r.status === 'pending' ? 'done' : 'pending' } : r
+        r.id === reminderId
+          ? { ...r, status: r.status === 'pending' ? 'done' : 'pending', _updatedAt: Date.now() } // 🔥 FIX: Atualiza timestamp
+          : r
       )
     );
   }, []);
@@ -301,6 +338,7 @@ function App() {
       type,
       createdAt: new Date(),
       author: userRole || undefined, // Adiciona quem criou a meta
+      _updatedAt: Date.now(), // 🔥 FIX: Timestamp de criação para merge LWW
     };
     setGoals(prev => [...prev, newGoal]);
   }, [userRole]);
@@ -317,11 +355,18 @@ function App() {
     if (completionIndex > -1) {
       setGoalCompletions(prev =>
         prev.map((c, i) =>
-          i === completionIndex ? { ...c, completed: !c.completed } : c
+          i === completionIndex
+            ? { ...c, completed: !c.completed, _updatedAt: Date.now() } // 🔥 FIX: Atualiza timestamp
+            : c
         )
       );
     } else {
-      const newCompletion: GoalCompletion = { goalId, date: today, completed: true };
+      const newCompletion: GoalCompletion = {
+        goalId,
+        date: today,
+        completed: true,
+        _updatedAt: Date.now(), // 🔥 FIX: Timestamp de criação
+      };
       setGoalCompletions(prev => [...prev, newCompletion]);
     }
   }, [goalCompletions]);
@@ -333,13 +378,16 @@ function App() {
       description: taskDescription,
       timestamp: new Date(),
       author: userRole || undefined, // Adiciona quem criou a tarefa
+      _updatedAt: Date.now(), // 🔥 FIX: Timestamp de criação
     };
     setTasks(prevTasks => [...prevTasks, newTask].sort((a, b) => a.timestamp.getTime() - b.timestamp.getTime()));
 
     // Update reminder with linkedTaskId
     setReminders(prevReminders =>
       prevReminders.map(r =>
-        r.id === reminderId ? { ...r, linkedTaskId: newTask.id, status: 'done' as const } : r
+        r.id === reminderId
+          ? { ...r, linkedTaskId: newTask.id, status: 'done' as const, _updatedAt: Date.now() } // 🔥 FIX: Atualiza timestamp
+          : r
       )
     );
   }, [userRole]);
