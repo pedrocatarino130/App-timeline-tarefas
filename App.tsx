@@ -12,7 +12,7 @@ import {
   UserData,
   getDeviceId,
 } from './services/syncService';
-import { hashData, getAdaptiveDebounce } from './services/syncUtils';
+import { hashData, getAdaptiveDebounce, mergeLWW } from './services/syncUtils';
 import { db } from './firebase.config';
 
 // Default initial data (used only if localStorage is empty)
@@ -94,15 +94,19 @@ function App() {
         }
 
         isSyncingFromFirebase.current = true; // Ativa flag para prevenir loop
-        setTasks(firebaseData.tasks);
-        setReminders(firebaseData.reminders);
-        setGoals(firebaseData.goals);
-        setGoalCompletions(firebaseData.goalCompletions);
+
+        // 🔥 FIX: Faz merge LWW com dados do localStorage (podem ser mais recentes se último sync falhou)
+        console.log(`[INIT] 🔀 Fazendo merge dos dados do Firebase com localStorage...`);
+        setTasks(prev => mergeLWW(prev, firebaseData.tasks));
+        setReminders(prev => mergeLWW(prev, firebaseData.reminders));
+        setGoals(prev => mergeLWW(prev, firebaseData.goals));
+        setGoalCompletions(prev => mergeLWW(prev, firebaseData.goalCompletions));
+
         lastLocalChangeTimestamp.current = firebaseData.lastUpdated || 0; // 🔥 FIX: Marca quando foi a última atualização
-        // Flag será resetada após timeout de 1 segundo para cobrir debounce completo
+        // Flag será resetada após timeout de 3 segundos para cobrir debounce completo (máximo é 1000ms + margem)
         setTimeout(() => {
           isSyncingFromFirebase.current = false;
-        }, 1000); // 🔥 FIX: Aumentado de 100ms para 1000ms
+        }, 3000); // 🔥 FIX: Aumentado de 1000ms para 3000ms (previne race condition com debounce)
       } else {
         console.log(`[INIT ${new Date().toISOString()}] 📦 Usando dados do localStorage`);
       }
@@ -155,19 +159,46 @@ function App() {
       // Ativa flag para prevenir loop infinito
       isSyncingFromFirebase.current = true;
 
-      setTasks(data.tasks);
-      setReminders(data.reminders);
-      setGoals(data.goals);
-      setGoalCompletions(data.goalCompletions);
+      // 🔥 FIX CRÍTICO: Usa merge LWW (Last-Write-Wins) no cliente para prevenir perda de dados
+      // Em vez de sobrescrever completamente, faz merge item-por-item baseado em timestamps
+      console.log(`[SYNC] 🔀 Fazendo merge LWW dos dados recebidos com estado local...`);
+
+      // Captura os dados merged para calcular hash depois
+      let mergedTasks: Task[];
+      let mergedReminders: Reminder[];
+      let mergedGoals: Goal[];
+      let mergedGoalCompletions: GoalCompletion[];
+
+      setTasks(prev => {
+        mergedTasks = mergeLWW(prev, data.tasks);
+        console.log(`[SYNC] 🔀 Tasks: ${prev.length} local + ${data.tasks.length} Firebase → ${mergedTasks.length} merged`);
+        return mergedTasks;
+      });
+      setReminders(prev => {
+        mergedReminders = mergeLWW(prev, data.reminders);
+        console.log(`[SYNC] 🔀 Reminders: ${prev.length} local + ${data.reminders.length} Firebase → ${mergedReminders.length} merged`);
+        return mergedReminders;
+      });
+      setGoals(prev => {
+        mergedGoals = mergeLWW(prev, data.goals);
+        console.log(`[SYNC] 🔀 Goals: ${prev.length} local + ${data.goals.length} Firebase → ${mergedGoals.length} merged`);
+        return mergedGoals;
+      });
+      setGoalCompletions(prev => {
+        mergedGoalCompletions = mergeLWW(prev, data.goalCompletions);
+        console.log(`[SYNC] 🔀 GoalCompletions: ${prev.length} local + ${data.goalCompletions.length} Firebase → ${mergedGoalCompletions.length} merged`);
+        return mergedGoalCompletions;
+      });
+
       lastSyncTime.current = firebaseTimestamp;
       lastLocalChangeTimestamp.current = firebaseTimestamp; // 🔥 FIX: Atualiza timestamp local
 
-      // 🔥 FIX #1: Atualiza hash para refletir dados do Firebase (previne loop)
+      // 🔥 FIX #1: Atualiza hash para refletir dados MERGED (não só os do Firebase)
       const newHash = hashData({
-        tasks: data.tasks,
-        reminders: data.reminders,
-        goals: data.goals,
-        goalCompletions: data.goalCompletions,
+        tasks: mergedTasks!,
+        reminders: mergedReminders!,
+        goals: mergedGoals!,
+        goalCompletions: mergedGoalCompletions!,
       });
       dataHashRef.current = newHash;
       console.log(`[SYNC] 🔑 Hash atualizado: ${newHash.substring(0, 8)}`);
@@ -178,10 +209,10 @@ function App() {
         console.log(`[SYNC ${new Date().toISOString()}] ✅ Save confirmado - limpando pendência`);
       }
 
-      // Reseta flag após atualização - AUMENTADO para 1 segundo
+      // Reseta flag após atualização - AUMENTADO para 3 segundos
       setTimeout(() => {
         isSyncingFromFirebase.current = false;
-      }, 1000); // 🔥 FIX: Aumentado de 100ms para 1000ms para cobrir debounce completo
+      }, 3000); // 🔥 FIX: Aumentado de 1000ms para 3000ms (previne race condition com debounce)
     });
 
     return () => {
@@ -218,9 +249,11 @@ function App() {
     // 🔥 FIX: Marca timestamp de mudança LOCAL imediatamente
     const changeTimestamp = Date.now();
     lastLocalChangeTimestamp.current = changeTimestamp;
+    pendingSaveTimestamp.current = changeTimestamp; // 🔥 FIX CRÍTICO: Marca save pendente IMEDIATAMENTE (fecha janela crítica)
     changeCountRef.current++; // Incrementa contador de mudanças
 
     console.log(`[SAVE ${new Date().toISOString()}] 🔄 Mudança local detectada (timestamp: ${changeTimestamp}, count: ${changeCountRef.current})`);
+    console.log(`[SAVE] 🔒 Save pendente marcado ANTES do debounce (previne sobrescrita do listener)`);
 
     // Salva no localStorage imediatamente
     saveToLocalStorage(STORAGE_KEYS.TASKS, tasks);
@@ -237,8 +270,8 @@ function App() {
     }
 
     syncTimeoutRef.current = setTimeout(async () => {
+      // pendingSaveTimestamp já foi setado acima (antes do debounce)
       const timestamp = Date.now();
-      pendingSaveTimestamp.current = timestamp; // 🔥 FIX: Marca que há um save pendente
       console.log(`[SAVE ${new Date().toISOString()}] 💾 Salvando no Firebase (timestamp: ${timestamp})...`);
       console.log(`[SAVE] 📊 ${tasks.length} tarefas, ${reminders.length} lembretes, ${goals.length} metas, ${goalCompletions.length} conclusões`);
       setIsSyncing(true);
