@@ -7,6 +7,7 @@ export interface Task {
   mediaUrl?: string;
   mediaType?: 'image' | 'video';
   author?: UserRole; // Quem criou a tarefa (Pedro ou Sato)
+  _updatedAt?: number; // 🔥 Timestamp da última modificação DESTE item (para merge LWW)
 }
 
 export type ReminderStatus = 'pending' | 'done';
@@ -20,6 +21,7 @@ export interface Reminder {
   status: ReminderStatus;
   linkedTaskId?: string; // Optional link to a timeline task
   author?: UserRole; // Quem criou o lembrete/comentário (Pedro ou Sato)
+  _updatedAt?: number; // 🔥 Timestamp da última modificação DESTE item (para merge LWW)
 }
 
 export interface GeminiMessage {
@@ -35,12 +37,14 @@ export interface Goal {
   type: GoalType;
   createdAt: Date;
   author?: UserRole; // Quem criou a meta (Pedro ou Sato)
+  _updatedAt?: number; // 🔥 Timestamp da última modificação DESTE item (para merge LWW)
 }
 
 export interface GoalCompletion {
   goalId: string;
   date: string; // YYYY-MM-DD
   completed: boolean;
+  _updatedAt?: number; // 🔥 Timestamp da última modificação DESTE item (para merge LWW)
 }
 
 export interface Comment {

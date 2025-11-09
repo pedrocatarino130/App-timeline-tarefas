@@ -9,6 +9,13 @@ import {
 } from 'firebase/firestore';
 import { db } from '../firebase.config';
 import { Task, Reminder, Goal, GoalCompletion } from '../types';
+import {
+  mergeLWW,
+  addTimestamps,
+  isValidDate,
+  dateToString,
+  stringToDate
+} from './syncUtils';
 
 // Chaves para localStorage
 export const STORAGE_KEYS = {
@@ -48,11 +55,6 @@ export interface UserData {
   lastUpdated: number;
   lastDeviceId?: string; // ID do dispositivo que fez a última atualização
 }
-
-// Função helper para validar se um Date é válido
-const isValidDate = (date: any): boolean => {
-  return date instanceof Date && !isNaN(date.getTime());
-};
 
 // Carrega dados do localStorage
 export const loadFromLocalStorage = <T>(key: string, defaultValue: T): T => {
@@ -110,43 +112,55 @@ export const saveToLocalStorage = <T>(key: string, data: T): void => {
   }
 };
 
-// Função helper para sanitizar objetos com datas inválidas
-const sanitizeData = (data: UserData): UserData => {
+/**
+ * 🔥 FIX #4: Sanitiza e normaliza dados para Firebase
+ *
+ * - Valida e corrige datas inválidas
+ * - Converte Date objects para ISO strings (Firebase-compatible)
+ * - Adiciona timestamps de versionamento (_updatedAt)
+ */
+const sanitizeData = (data: UserData): any => {
   const now = new Date();
+  const timestamp = Date.now();
 
   return {
     tasks: data.tasks.map(task => ({
       ...task,
-      timestamp: isValidDate(task.timestamp) ? task.timestamp : now,
+      timestamp: dateToString(isValidDate(task.timestamp) ? task.timestamp : now),
+      _updatedAt: task._updatedAt || timestamp,
     })),
     reminders: data.reminders.map(reminder => ({
       ...reminder,
-      timestamp: isValidDate(reminder.timestamp) ? reminder.timestamp : now,
+      timestamp: dateToString(isValidDate(reminder.timestamp) ? reminder.timestamp : now),
+      _updatedAt: reminder._updatedAt || timestamp,
     })),
     goals: data.goals.map(goal => ({
       ...goal,
-      createdAt: isValidDate(goal.createdAt) ? goal.createdAt : now,
+      createdAt: dateToString(isValidDate(goal.createdAt) ? goal.createdAt : now),
+      _updatedAt: goal._updatedAt || timestamp,
     })),
-    goalCompletions: data.goalCompletions,
+    goalCompletions: data.goalCompletions.map(completion => ({
+      ...completion,
+      _updatedAt: completion._updatedAt || timestamp,
+    })),
     lastUpdated: data.lastUpdated,
     lastDeviceId: data.lastDeviceId,
   };
 };
 
-// Função helper para fazer merge de arrays por ID (previne perda de dados)
-const mergeArraysById = <T extends { id: string }>(
+/**
+ * 🔥 FIX #3: Merge inteligente usando LWW (Last-Write-Wins) por item
+ *
+ * Agora usa mergeLWW do syncUtils, que compara timestamps por item
+ * em vez de simplesmente sobrescrever (last-write-wins no array inteiro).
+ *
+ * Isso previne perda de dados quando múltiplos dispositivos salvam simultaneamente.
+ */
+const mergeArraysById = <T extends { id: string; _updatedAt?: number }>(
   existingArray: T[],
   newArray: T[]
 ): T[] => {
-  const merged = new Map<string, T>();
-
-  // Adiciona itens existentes
-  existingArray.forEach(item => merged.set(item.id, item));
-
-  // Sobrescreve/adiciona com novos itens (last-write-wins por item)
-  newArray.forEach(item => merged.set(item.id, item));
-
-  return Array.from(merged.values());
+  return mergeLWW(existingArray, newArray);
 };
 
 // Salva todos os dados no Firebase (workspace compartilhado) usando transação
@@ -294,21 +308,27 @@ export const loadFromFirebase = async (): Promise<UserData | null> => {
         console.log(`📋 [SYNC] Metas carregadas:`, data.goals.map(g => ({ id: g.id, desc: g.description?.substring(0, 30) })));
       }
 
-      // Reconverte timestamps para objetos Date
+      // 🔥 FIX #4: Reconverte ISO strings para objetos Date
       return {
-        tasks: data.tasks.map((task: Task) => ({
+        tasks: data.tasks.map((task: any) => ({
           ...task,
-          timestamp: new Date(task.timestamp),
+          timestamp: stringToDate(task.timestamp),
+          _updatedAt: task._updatedAt || 0,
         })),
-        reminders: data.reminders.map((reminder: Reminder) => ({
+        reminders: data.reminders.map((reminder: any) => ({
           ...reminder,
-          timestamp: new Date(reminder.timestamp),
+          timestamp: stringToDate(reminder.timestamp),
+          _updatedAt: reminder._updatedAt || 0,
         })),
-        goals: data.goals.map((goal: Goal) => ({
+        goals: data.goals.map((goal: any) => ({
           ...goal,
-          createdAt: new Date(goal.createdAt),
+          createdAt: stringToDate(goal.createdAt),
+          _updatedAt: goal._updatedAt || 0,
         })),
-        goalCompletions: data.goalCompletions,
+        goalCompletions: data.goalCompletions.map((completion: any) => ({
+          ...completion,
+          _updatedAt: completion._updatedAt || 0,
+        })),
         lastUpdated: data.lastUpdated,
         lastDeviceId: data.lastDeviceId,
       };
@@ -356,21 +376,27 @@ export const syncWithFirebase = (
           console.log(`📋 [SYNC] Metas recebidas via listener:`, data.goals.map(g => ({ id: g.id, desc: g.description?.substring(0, 30) })));
         }
 
-        // Reconverte timestamps para objetos Date
+        // 🔥 FIX #4: Reconverte ISO strings para objetos Date
         const convertedData: UserData = {
-          tasks: data.tasks.map((task: Task) => ({
+          tasks: data.tasks.map((task: any) => ({
             ...task,
-            timestamp: new Date(task.timestamp),
+            timestamp: stringToDate(task.timestamp),
+            _updatedAt: task._updatedAt || 0,
           })),
-          reminders: data.reminders.map((reminder: Reminder) => ({
+          reminders: data.reminders.map((reminder: any) => ({
             ...reminder,
-            timestamp: new Date(reminder.timestamp),
+            timestamp: stringToDate(reminder.timestamp),
+            _updatedAt: reminder._updatedAt || 0,
           })),
-          goals: data.goals.map((goal: Goal) => ({
+          goals: data.goals.map((goal: any) => ({
             ...goal,
-            createdAt: new Date(goal.createdAt),
+            createdAt: stringToDate(goal.createdAt),
+            _updatedAt: goal._updatedAt || 0,
           })),
-          goalCompletions: data.goalCompletions,
+          goalCompletions: data.goalCompletions.map((completion: any) => ({
+            ...completion,
+            _updatedAt: completion._updatedAt || 0,
+          })),
           lastUpdated: data.lastUpdated,
           lastDeviceId: data.lastDeviceId,
         };
