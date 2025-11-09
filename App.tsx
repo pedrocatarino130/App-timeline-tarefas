@@ -82,7 +82,13 @@ function App() {
 
       if (firebaseData) {
         console.log(`[INIT ${new Date().toISOString()}] ✅ Dados carregados do Firebase (workspace compartilhado)!`);
-        console.log(`[INIT] ${firebaseData.tasks?.length || 0} tarefas, ${firebaseData.reminders?.length || 0} lembretes, ${firebaseData.goals?.length || 0} metas`);
+        console.log(`[INIT] ${firebaseData.tasks?.length || 0} tarefas, ${firebaseData.reminders?.length || 0} lembretes, ${firebaseData.goals?.length || 0} metas, ${firebaseData.goalCompletions?.length || 0} conclusões`);
+
+        // Log detalhado das metas
+        if (firebaseData.goals && firebaseData.goals.length > 0) {
+          console.log(`[INIT] 📋 Metas do Firebase:`, firebaseData.goals.map(g => ({ id: g.id, desc: g.description.substring(0, 30) })));
+        }
+
         isSyncingFromFirebase.current = true; // Ativa flag para prevenir loop
         setTasks(firebaseData.tasks);
         setReminders(firebaseData.reminders);
@@ -120,6 +126,12 @@ function App() {
 
       console.log(`[SYNC ${new Date().toISOString()}] 📥 Dados recebidos de outro dispositivo!`);
       console.log(`[SYNC] Device remoto: ${data.lastDeviceId}, Device local: ${currentDeviceId}`);
+      console.log(`[SYNC] 📊 Aplicando ao estado: ${data.tasks.length} tarefas, ${data.reminders.length} lembretes, ${data.goals.length} metas, ${data.goalCompletions.length} conclusões`);
+
+      // Log detalhado das metas
+      if (data.goals && data.goals.length > 0) {
+        console.log(`[SYNC] 📋 Metas recebidas:`, data.goals.map(g => ({ id: g.id, desc: g.description.substring(0, 30) })));
+      }
 
       // Ativa flag para prevenir loop infinito
       isSyncingFromFirebase.current = true;
