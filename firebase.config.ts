@@ -14,8 +14,8 @@ const firebaseConfig = {
 };
 
 // Inicializa Firebase apenas se ainda não foi inicializado
-let app: FirebaseApp;
-let db: Firestore;
+let app: FirebaseApp | undefined;
+let db: Firestore | undefined;
 
 console.log('🔧 [FIREBASE] Iniciando configuração...');
 console.log('🔧 [FIREBASE] Credenciais:', {
@@ -56,10 +56,17 @@ try {
         console.error('❌ [FIREBASE] Erro ao habilitar offline persistence:', err);
       }
     });
-} catch (error) {
+} catch (error: any) {
   console.error('❌ [FIREBASE] ERRO CRÍTICO ao inicializar:', error);
+  console.error('❌ [FIREBASE] Tipo de erro:', error.code || error.message);
   console.error('❌ [FIREBASE] App vai funcionar APENAS com localStorage (sem sincronização)');
-  // Se houver erro, continuamos sem Firebase (fallback para localStorage)
+  console.error('💡 [FIREBASE] Verifique:');
+  console.error('   1. Se as credenciais do Firebase estão corretas');
+  console.error('   2. Se o projeto existe no Firebase Console');
+  console.error('   3. Se há conexão com a internet');
+  // Garante que db seja undefined em caso de erro
+  db = undefined;
+  app = undefined;
 }
 
 export { app, db };
