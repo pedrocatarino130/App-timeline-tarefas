@@ -3,13 +3,37 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
     
-    // Permite leitura e escrita no workspace compartilhado "casa_satos"
-    // Este é o workspace usado por Pedro e Sato
-    match /workspaces/casa_satos {
+    // ==================== NOVA ESTRUTURA: COLLECTIONS SEPARADAS ====================
+    
+    // Tasks - Tarefas do pet hotel
+    match /tasks/{taskId} {
       allow read, write: if true;
     }
-
-    // Bloqueia acesso a qualquer outro documento/collection
+    
+    // Reminders - Lembretes e comentários
+    match /reminders/{reminderId} {
+      allow read, write: if true;
+    }
+    
+    // Goals - Metas diárias/únicas
+    match /goals/{goalId} {
+      allow read, write: if true;
+    }
+    
+    // Goal Completions - Conclusões de metas
+    match /goalCompletions/{completionId} {
+      allow read, write: if true;
+    }
+    
+    // ==================== ESTRUTURA ANTIGA (MANTIDA COMO BACKUP) ====================
+    
+    // Workspace antigo - pode ser deletado após migração bem-sucedida
+    match /workspaces/{workspaceId} {
+      allow read: if true;  // Apenas leitura para backup
+      allow write: if false; // Não permite mais escritas
+    }
+    
+    // Bloqueia acesso a qualquer outra collection
     match /{document=**} {
       allow read, write: if false;
     }
