@@ -123,23 +123,29 @@ const sanitizeData = (data: UserData): any => {
   const now = new Date();
   const timestamp = Date.now();
 
+  // 🔥 FIX: Valida arrays antes de processar
+  const safeTasks = Array.isArray(data.tasks) ? data.tasks : [];
+  const safeReminders = Array.isArray(data.reminders) ? data.reminders : [];
+  const safeGoals = Array.isArray(data.goals) ? data.goals : [];
+  const safeGoalCompletions = Array.isArray(data.goalCompletions) ? data.goalCompletions : [];
+
   return {
-    tasks: data.tasks.map(task => ({
+    tasks: safeTasks.map(task => ({
       ...task,
       timestamp: dateToString(isValidDate(task.timestamp) ? task.timestamp : now),
       _updatedAt: task._updatedAt || timestamp,
     })),
-    reminders: data.reminders.map(reminder => ({
+    reminders: safeReminders.map(reminder => ({
       ...reminder,
       timestamp: dateToString(isValidDate(reminder.timestamp) ? reminder.timestamp : now),
       _updatedAt: reminder._updatedAt || timestamp,
     })),
-    goals: data.goals.map(goal => ({
+    goals: safeGoals.map(goal => ({
       ...goal,
       createdAt: dateToString(isValidDate(goal.createdAt) ? goal.createdAt : now),
       _updatedAt: goal._updatedAt || timestamp,
     })),
-    goalCompletions: data.goalCompletions.map(completion => ({
+    goalCompletions: safeGoalCompletions.map(completion => ({
       ...completion,
       _updatedAt: completion._updatedAt || timestamp,
     })),
@@ -209,14 +215,32 @@ export const saveToFirebase = async (
         // Se existe, faz merge inteligente dos arrays
         const existingData = docSnapshot.data() as UserData;
 
+        // 🔥 FIX: Valida dados existentes antes de fazer merge
+        const existingTasks = Array.isArray(existingData.tasks) ? existingData.tasks : [];
+        const existingReminders = Array.isArray(existingData.reminders) ? existingData.reminders : [];
+        const existingGoals = Array.isArray(existingData.goals) ? existingData.goals : [];
+        const existingGoalCompletions = Array.isArray(existingData.goalCompletions) ? existingData.goalCompletions : [];
+
+        if (!Array.isArray(existingData.tasks)) {
+          console.warn('[SYNC] ⚠️ existingData.tasks não é array, usando [] para merge');
+        }
+        if (!Array.isArray(existingData.goals)) {
+          console.warn('[SYNC] ⚠️ existingData.goals não é array, usando [] para merge');
+        }
+
+        console.log(`[SYNC] 📊 Merge: ${existingTasks.length} tasks + ${sanitizedData.tasks.length} novos`);
+        console.log(`[SYNC] 📊 Merge: ${existingGoals.length} goals + ${sanitizedData.goals.length} novos`);
+
         const mergedData: UserData = {
-          tasks: mergeArraysById(existingData.tasks || [], sanitizedData.tasks),
-          reminders: mergeArraysById(existingData.reminders || [], sanitizedData.reminders),
-          goals: mergeArraysById(existingData.goals || [], sanitizedData.goals),
-          goalCompletions: mergeArraysById(existingData.goalCompletions || [], sanitizedData.goalCompletions),
+          tasks: mergeArraysById(existingTasks, sanitizedData.tasks),
+          reminders: mergeArraysById(existingReminders, sanitizedData.reminders),
+          goals: mergeArraysById(existingGoals, sanitizedData.goals),
+          goalCompletions: mergeArraysById(existingGoalCompletions, sanitizedData.goalCompletions),
           lastUpdated: Date.now(),
           lastDeviceId: deviceId,
         };
+
+        console.log(`[SYNC] ✅ Resultado do merge: ${mergedData.tasks.length} tasks, ${mergedData.goals.length} goals`);
 
         transaction.set(workspaceDocRef, mergedData);
       }
@@ -309,23 +333,34 @@ export const loadFromFirebase = async (): Promise<UserData | null> => {
       }
 
       // 🔥 FIX #4: Reconverte ISO strings para objetos Date
+      // 🔥 FIX: Valida arrays antes de processar para prevenir crashes
+      const safeTasks = Array.isArray(data.tasks) ? data.tasks : [];
+      const safeReminders = Array.isArray(data.reminders) ? data.reminders : [];
+      const safeGoals = Array.isArray(data.goals) ? data.goals : [];
+      const safeGoalCompletions = Array.isArray(data.goalCompletions) ? data.goalCompletions : [];
+
+      if (!Array.isArray(data.tasks)) console.warn('[SYNC] ⚠️ data.tasks não é array:', data.tasks);
+      if (!Array.isArray(data.reminders)) console.warn('[SYNC] ⚠️ data.reminders não é array:', data.reminders);
+      if (!Array.isArray(data.goals)) console.warn('[SYNC] ⚠️ data.goals não é array:', data.goals);
+      if (!Array.isArray(data.goalCompletions)) console.warn('[SYNC] ⚠️ data.goalCompletions não é array:', data.goalCompletions);
+
       return {
-        tasks: data.tasks.map((task: any) => ({
+        tasks: safeTasks.map((task: any) => ({
           ...task,
           timestamp: stringToDate(task.timestamp),
           _updatedAt: task._updatedAt || 0,
         })),
-        reminders: data.reminders.map((reminder: any) => ({
+        reminders: safeReminders.map((reminder: any) => ({
           ...reminder,
           timestamp: stringToDate(reminder.timestamp),
           _updatedAt: reminder._updatedAt || 0,
         })),
-        goals: data.goals.map((goal: any) => ({
+        goals: safeGoals.map((goal: any) => ({
           ...goal,
           createdAt: stringToDate(goal.createdAt),
           _updatedAt: goal._updatedAt || 0,
         })),
-        goalCompletions: data.goalCompletions.map((completion: any) => ({
+        goalCompletions: safeGoalCompletions.map((completion: any) => ({
           ...completion,
           _updatedAt: completion._updatedAt || 0,
         })),
@@ -377,23 +412,34 @@ export const syncWithFirebase = (
         }
 
         // 🔥 FIX #4: Reconverte ISO strings para objetos Date
+        // 🔥 FIX: Valida arrays antes de processar para prevenir crashes
+        const safeTasks = Array.isArray(data.tasks) ? data.tasks : [];
+        const safeReminders = Array.isArray(data.reminders) ? data.reminders : [];
+        const safeGoals = Array.isArray(data.goals) ? data.goals : [];
+        const safeGoalCompletions = Array.isArray(data.goalCompletions) ? data.goalCompletions : [];
+
+        if (!Array.isArray(data.tasks)) console.warn('[SYNC LISTENER] ⚠️ data.tasks não é array:', data.tasks);
+        if (!Array.isArray(data.reminders)) console.warn('[SYNC LISTENER] ⚠️ data.reminders não é array:', data.reminders);
+        if (!Array.isArray(data.goals)) console.warn('[SYNC LISTENER] ⚠️ data.goals não é array:', data.goals);
+        if (!Array.isArray(data.goalCompletions)) console.warn('[SYNC LISTENER] ⚠️ data.goalCompletions não é array:', data.goalCompletions);
+
         const convertedData: UserData = {
-          tasks: data.tasks.map((task: any) => ({
+          tasks: safeTasks.map((task: any) => ({
             ...task,
             timestamp: stringToDate(task.timestamp),
             _updatedAt: task._updatedAt || 0,
           })),
-          reminders: data.reminders.map((reminder: any) => ({
+          reminders: safeReminders.map((reminder: any) => ({
             ...reminder,
             timestamp: stringToDate(reminder.timestamp),
             _updatedAt: reminder._updatedAt || 0,
           })),
-          goals: data.goals.map((goal: any) => ({
+          goals: safeGoals.map((goal: any) => ({
             ...goal,
             createdAt: stringToDate(goal.createdAt),
             _updatedAt: goal._updatedAt || 0,
           })),
-          goalCompletions: data.goalCompletions.map((completion: any) => ({
+          goalCompletions: safeGoalCompletions.map((completion: any) => ({
             ...completion,
             _updatedAt: completion._updatedAt || 0,
           })),
