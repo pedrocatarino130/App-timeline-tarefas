@@ -81,14 +81,29 @@ const Timeline: React.FC<TimelineProps> = ({ userRole, tasks, goals, goalComplet
     }
   };
 
-  const handleSendAudioComment = (taskId: string) => (audioUrl: string, audioBlob: Blob) => {
-    onSendReminder({
-      type: 'audio',
-      content: 'Comentário em áudio',
-      audioUrl: audioUrl,
-      linkedTaskId: taskId,
-    });
-    setCommentingTask(null);
+  const handleSendAudioComment = (taskId: string) => async (audioUrl: string, audioBlob: Blob) => {
+    try {
+      // Converter blob para base64 para poder salvar no Firestore e compartilhar entre dispositivos
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        const base64Audio = reader.result as string;
+        onSendReminder({
+          type: 'audio',
+          content: 'Comentário em áudio',
+          audioUrl: base64Audio,
+          linkedTaskId: taskId,
+        });
+        setCommentingTask(null);
+      };
+      reader.onerror = () => {
+        console.error('Erro ao converter áudio para base64');
+        alert('Erro ao processar áudio. Tente novamente.');
+      };
+      reader.readAsDataURL(audioBlob);
+    } catch (error) {
+      console.error('Erro ao processar áudio:', error);
+      alert('Erro ao processar áudio. Tente novamente.');
+    }
   };
 
   const cancelComment = () => {

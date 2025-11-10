@@ -18,8 +18,23 @@ const ReminderInput: React.FC<ReminderInputProps> = ({ onSend }) => {
     }
   };
 
-  const handleSendAudio = (audioUrl: string, audioBlob: Blob) => {
-     onSend({ type: 'audio', content: 'Mensagem de áudio', audioUrl });
+  const handleSendAudio = async (audioUrl: string, audioBlob: Blob) => {
+    try {
+      // Converter blob para base64 para poder salvar no Firestore e compartilhar entre dispositivos
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        const base64Audio = reader.result as string;
+        onSend({ type: 'audio', content: 'Mensagem de áudio', audioUrl: base64Audio });
+      };
+      reader.onerror = () => {
+        console.error('Erro ao converter áudio para base64');
+        alert('Erro ao processar áudio. Tente novamente.');
+      };
+      reader.readAsDataURL(audioBlob);
+    } catch (error) {
+      console.error('Erro ao processar áudio:', error);
+      alert('Erro ao processar áudio. Tente novamente.');
+    }
   };
 
   return (

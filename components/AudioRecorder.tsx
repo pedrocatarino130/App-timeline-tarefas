@@ -16,6 +16,9 @@ const AudioRecorder: React.FC<AudioRecorderProps> = ({ onSendAudio }) => {
   const timerRef = useRef<NodeJS.Timeout | null>(null);
 
   const { getAudioStream, hasPermission, error: permissionError } = useAudioPermission();
+  
+  // Limite máximo de gravação em segundos (60s = ~200-400KB em base64)
+  const MAX_RECORDING_TIME = 60;
 
   useEffect(() => {
     return () => {
@@ -69,7 +72,15 @@ const AudioRecorder: React.FC<AudioRecorderProps> = ({ onSendAudio }) => {
       setIsCancelled(false);
 
       timerRef.current = setInterval(() => {
-        setRecordingTime(prev => prev + 1);
+        setRecordingTime(prev => {
+          const newTime = prev + 1;
+          // Auto-parar quando atingir o limite máximo
+          if (newTime >= MAX_RECORDING_TIME) {
+            console.log('[AUDIO] Tempo máximo de gravação atingido, parando automaticamente');
+            stopRecording(false);
+          }
+          return newTime;
+        });
       }, 1000);
 
     } catch (err) {
@@ -129,11 +140,15 @@ const AudioRecorder: React.FC<AudioRecorderProps> = ({ onSendAudio }) => {
           <div className="flex flex-col items-center gap-4">
             <div className="flex items-center gap-3">
               <div className="w-3 h-3 bg-red-500 rounded-full animate-pulse shadow-lg shadow-red-500/50" />
-              <span className="text-4xl font-light text-white tabular-nums">
+              <span className={`text-4xl font-light tabular-nums ${recordingTime >= 50 ? 'text-yellow-400 animate-pulse' : 'text-white'}`}>
                 {formatTime(recordingTime)}
               </span>
             </div>
-            <p className="text-gray-300 text-sm">Gravando áudio...</p>
+            <p className="text-gray-300 text-sm">
+              {recordingTime >= 50 
+                ? `⚠️ Parando em ${MAX_RECORDING_TIME - recordingTime}s...` 
+                : 'Gravando áudio...'}
+            </p>
           </div>
 
           {/* Onda sonora */}

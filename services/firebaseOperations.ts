@@ -23,6 +23,22 @@ import {
 import { db } from '../firebase.config';
 import { Task, Reminder, Goal, GoalCompletion } from '../types';
 
+// ==================== HELPER FUNCTIONS ====================
+
+/**
+ * Remove campos undefined de um objeto antes de salvar no Firestore
+ * Firestore não aceita campos com valor undefined
+ */
+const removeUndefinedFields = (obj: any): any => {
+  const cleaned: any = {};
+  Object.keys(obj).forEach(key => {
+    if (obj[key] !== undefined) {
+      cleaned[key] = obj[key];
+    }
+  });
+  return cleaned;
+};
+
 // ==================== TASKS ====================
 
 /**
@@ -35,10 +51,12 @@ export const addTask = async (task: Omit<Task, 'id'>): Promise<string | null> =>
   }
 
   try {
-    const docRef = await addDoc(collection(db, 'tasks'), {
+    const taskData = removeUndefinedFields({
       ...task,
       timestamp: task.timestamp instanceof Date ? Timestamp.fromDate(task.timestamp) : Timestamp.now(),
     });
+    
+    const docRef = await addDoc(collection(db, 'tasks'), taskData);
     console.log('[FIREBASE] ✅ Tarefa adicionada:', docRef.id);
     return docRef.id;
   } catch (error) {
@@ -58,12 +76,15 @@ export const updateTask = async (id: string, updates: Partial<Task>): Promise<bo
 
   try {
     const taskRef = doc(db, 'tasks', id);
-    const updateData: any = { ...updates };
+    let updateData: any = { ...updates };
     
     // Converte Date para Timestamp se necessário
     if (updates.timestamp instanceof Date) {
       updateData.timestamp = Timestamp.fromDate(updates.timestamp);
     }
+    
+    // Remove campos undefined
+    updateData = removeUndefinedFields(updateData);
     
     await updateDoc(taskRef, updateData);
     console.log('[FIREBASE] ✅ Tarefa atualizada:', id);
@@ -141,10 +162,25 @@ export const addReminder = async (reminder: Omit<Reminder, 'id'>): Promise<strin
   }
 
   try {
-    const docRef = await addDoc(collection(db, 'reminders'), {
+    // Verificar tamanho do audioUrl se for base64
+    if (reminder.audioUrl && reminder.audioUrl.startsWith('data:')) {
+      const sizeInBytes = reminder.audioUrl.length;
+      const sizeInKB = sizeInBytes / 1024;
+      console.log(`[FIREBASE] Tamanho do áudio: ${sizeInKB.toFixed(2)} KB`);
+      
+      // Firestore tem limite de ~1MB por documento, vamos avisar se estiver próximo
+      if (sizeInBytes > 900000) { // 900KB
+        console.warn('[FIREBASE] ⚠️ Áudio muito grande! Pode causar problemas.');
+        // Não bloqueia, mas avisa
+      }
+    }
+
+    const reminderData = removeUndefinedFields({
       ...reminder,
       timestamp: reminder.timestamp instanceof Date ? Timestamp.fromDate(reminder.timestamp) : Timestamp.now(),
     });
+    
+    const docRef = await addDoc(collection(db, 'reminders'), reminderData);
     console.log('[FIREBASE] ✅ Lembrete adicionado:', docRef.id);
     return docRef.id;
   } catch (error) {
@@ -164,12 +200,15 @@ export const updateReminder = async (id: string, updates: Partial<Reminder>): Pr
 
   try {
     const reminderRef = doc(db, 'reminders', id);
-    const updateData: any = { ...updates };
+    let updateData: any = { ...updates };
     
     // Converte Date para Timestamp se necessário
     if (updates.timestamp instanceof Date) {
       updateData.timestamp = Timestamp.fromDate(updates.timestamp);
     }
+    
+    // Remove campos undefined
+    updateData = removeUndefinedFields(updateData);
     
     await updateDoc(reminderRef, updateData);
     console.log('[FIREBASE] ✅ Lembrete atualizado:', id);
@@ -249,10 +288,12 @@ export const addGoal = async (goal: Omit<Goal, 'id'>): Promise<string | null> =>
   }
 
   try {
-    const docRef = await addDoc(collection(db, 'goals'), {
+    const goalData = removeUndefinedFields({
       ...goal,
       createdAt: goal.createdAt instanceof Date ? Timestamp.fromDate(goal.createdAt) : Timestamp.now(),
     });
+    
+    const docRef = await addDoc(collection(db, 'goals'), goalData);
     console.log('[FIREBASE] ✅ Meta adicionada:', docRef.id);
     return docRef.id;
   } catch (error) {
