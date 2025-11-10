@@ -48,22 +48,22 @@ const TaskForm: React.FC<TaskFormProps> = ({ onSubmit, onCancel }) => {
   };
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-20" onClick={onCancel}>
-      <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl p-6 w-full max-w-md m-4" onClick={e => e.stopPropagation()}>
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-start sm:items-center justify-center z-20 overflow-y-auto" onClick={onCancel}>
+      <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl p-4 sm:p-6 w-full max-w-md m-2 sm:m-4 my-4 sm:my-auto" onClick={e => e.stopPropagation()}>
         <h3 className="text-lg font-bold mb-4 text-gray-900 dark:text-white">Nova Tarefa</h3>
-        <form onSubmit={handleSubmit}>
+        <form onSubmit={handleSubmit} className="space-y-4">
           <textarea
             value={description}
             onChange={(e) => setDescription(e.target.value)}
             placeholder="Ex: Limpei a parte de cima (opcional se houver imagem)"
-            className="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400"
+            className="w-full p-3 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white resize-none"
             rows={3}
             autoFocus
           />
           <input type="file" accept="image/*,video/*" ref={fileInputRef} onChange={handleFileChange} className="hidden" />
           
           {mediaUrl && (
-            <div className="mt-4 relative w-32 h-32">
+            <div className="relative w-32 h-32">
               {mediaType === 'video'
                 ? <video src={mediaUrl} className="w-full h-full object-cover rounded-md" />
                 : <img src={mediaUrl} alt="Preview" className="w-full h-full object-cover rounded-md" />
@@ -79,29 +79,31 @@ const TaskForm: React.FC<TaskFormProps> = ({ onSubmit, onCancel }) => {
             </div>
           )}
 
-          <div className="mt-6 flex justify-between items-center">
+          {/* Botões reorganizados para melhor responsividade no mobile */}
+          <div className="flex flex-col sm:flex-row sm:justify-between gap-3">
              <button
               type="button"
               onClick={triggerFileInput}
-              className="px-4 py-2 flex items-center bg-gray-200 text-gray-800 rounded-md hover:bg-gray-300 dark:bg-gray-600 dark:text-gray-200 dark:hover:bg-gray-500"
+              className="w-full sm:w-auto px-4 py-2.5 flex items-center justify-center bg-gray-200 text-gray-800 rounded-md hover:bg-gray-300 dark:bg-gray-600 dark:text-gray-200 dark:hover:bg-gray-500 font-medium"
             >
               <ImageIcon className="w-5 h-5 mr-2"/>
               {mediaUrl ? 'Trocar Mídia' : 'Adicionar Mídia'}
             </button>
-            <div className="flex space-x-2">
+            
+            <div className="flex gap-2">
                 <button
                 type="button"
                 onClick={onCancel}
-                className="px-4 py-2 bg-gray-200 text-gray-800 rounded-md hover:bg-gray-300 dark:bg-gray-600 dark:text-gray-200 dark:hover:bg-gray-500"
+                className="flex-1 sm:flex-none px-4 py-2.5 bg-gray-200 text-gray-800 rounded-md hover:bg-gray-300 dark:bg-gray-600 dark:text-gray-200 dark:hover:bg-gray-500 font-medium"
                 >
                 Cancelar
                 </button>
                 <button
                 type="submit"
                 disabled={!description.trim() && !mediaUrl}
-                className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:bg-blue-300"
+                className="flex-1 sm:flex-none px-4 py-2.5 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:bg-blue-300 disabled:cursor-not-allowed font-medium"
                 >
-                Salvar Tarefa
+                Salvar
                 </button>
             </div>
           </div>

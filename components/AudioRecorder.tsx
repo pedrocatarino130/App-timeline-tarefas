@@ -157,23 +157,23 @@ const AudioRecorder: React.FC<AudioRecorderProps> = ({ onSendAudio }) => {
           </div>
 
           {/* Botões de controle */}
-          <div className="flex items-center justify-center gap-8">
+          <div className="flex items-center justify-center gap-6 sm:gap-8">
             {/* Botão de cancelar */}
             <button
               onClick={handleCancelAudio}
-              className="p-5 bg-red-500/20 hover:bg-red-500/30 rounded-full transition-all active:scale-90"
+              className="p-4 sm:p-5 bg-red-500/20 hover:bg-red-500/30 rounded-full transition-all active:scale-90 touch-manipulation"
               title="Cancelar gravação"
             >
-              <TrashIcon className="w-7 h-7 text-red-400" />
+              <TrashIcon className="w-7 h-7 sm:w-8 sm:h-8 text-red-400" />
             </button>
 
             {/* Botão de enviar */}
             <button
               onClick={handleSendAudio}
-              className="p-6 bg-green-600 hover:bg-green-700 rounded-full shadow-2xl shadow-green-600/50 transition-all active:scale-90"
+              className="p-5 sm:p-6 bg-green-600 hover:bg-green-700 rounded-full shadow-2xl shadow-green-600/50 transition-all active:scale-90 touch-manipulation"
               title="Enviar áudio"
             >
-              <SendIcon className="w-8 h-8 text-white" />
+              <SendIcon className="w-8 h-8 sm:w-9 sm:h-9 text-white" />
             </button>
           </div>
         </div>
