@@ -143,6 +143,14 @@ function App() {
     mediaUrl?: string,
     mediaType?: 'image' | 'video'
   ) => {
+    console.log('[APP] Recebendo tarefa para salvar:', {
+      description,
+      hasMediaUrl: !!mediaUrl,
+      mediaType,
+      mediaUrlLength: mediaUrl?.length,
+      mediaSizeKB: mediaUrl ? ((mediaUrl.length * 3) / 4 / 1024).toFixed(0) : 0
+    });
+
     const newTask: Omit<Task, 'id'> = {
       description,
       timestamp: new Date(),
@@ -155,6 +163,8 @@ function App() {
     if (!taskId) {
       console.error('[APP] ❌ Falha ao adicionar tarefa');
       setFirebaseError('Erro ao adicionar tarefa. Tente novamente.');
+    } else {
+      console.log('[APP] ✅ Tarefa adicionada com sucesso! ID:', taskId);
     }
   }, [userRole]);
 

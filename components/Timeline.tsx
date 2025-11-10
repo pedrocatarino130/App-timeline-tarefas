@@ -27,6 +27,19 @@ const Timeline: React.FC<TimelineProps> = ({ userRole, tasks, goals, goalComplet
   const commentTextareaRef = useRef<HTMLTextAreaElement>(null);
   const commentContainerRef = useRef<HTMLDivElement>(null);
   const sortedTasks = [...tasks].sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime());
+  
+  // Log para debug de mídias
+  useEffect(() => {
+    const tasksWithMedia = tasks.filter(t => t.mediaUrl);
+    if (tasksWithMedia.length > 0) {
+      console.log('[TIMELINE] Tarefas com mídia:', tasksWithMedia.length, tasksWithMedia.map(t => ({
+        id: t.id,
+        description: t.description.substring(0, 30),
+        hasMediaUrl: !!t.mediaUrl,
+        mediaType: t.mediaType
+      })));
+    }
+  }, [tasks]);
 
   // Auto-scroll quando o formulário de comentário é aberto
   useEffect(() => {

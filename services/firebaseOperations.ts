@@ -51,16 +51,34 @@ export const addTask = async (task: Omit<Task, 'id'>): Promise<string | null> =>
   }
 
   try {
+    // Log detalhado do que será salvo
+    console.log('[FIREBASE] Preparando para salvar tarefa:', {
+      hasDescription: !!task.description,
+      hasMediaUrl: !!task.mediaUrl,
+      mediaType: task.mediaType,
+      mediaUrlLength: task.mediaUrl?.length,
+      mediaSizeKB: task.mediaUrl ? ((task.mediaUrl.length * 3) / 4 / 1024).toFixed(0) : 0
+    });
+
     const taskData = removeUndefinedFields({
       ...task,
       timestamp: task.timestamp instanceof Date ? Timestamp.fromDate(task.timestamp) : Timestamp.now(),
     });
     
+    console.log('[FIREBASE] Dados após removeUndefinedFields:', {
+      hasMediaUrl: !!taskData.mediaUrl,
+      mediaType: taskData.mediaType,
+      keys: Object.keys(taskData)
+    });
+    
     const docRef = await addDoc(collection(db, 'tasks'), taskData);
-    console.log('[FIREBASE] ✅ Tarefa adicionada:', docRef.id);
+    console.log('[FIREBASE] ✅ Tarefa adicionada com sucesso! ID:', docRef.id);
     return docRef.id;
   } catch (error) {
     console.error('[FIREBASE] ❌ Erro ao adicionar tarefa:', error);
+    if (error instanceof Error) {
+      console.error('[FIREBASE] Mensagem de erro:', error.message);
+    }
     return null;
   }
 };
@@ -129,7 +147,7 @@ export const subscribeToTasks = (callback: (tasks: Task[]) => void): Unsubscribe
     return onSnapshot(q, (snapshot: QuerySnapshot) => {
       const tasks: Task[] = snapshot.docs.map(doc => {
         const data = doc.data();
-        return {
+        const task = {
           id: doc.id,
           description: data.description || '',
           timestamp: data.timestamp?.toDate() || new Date(),
@@ -137,9 +155,23 @@ export const subscribeToTasks = (callback: (tasks: Task[]) => void): Unsubscribe
           mediaType: data.mediaType,
           author: data.author,
         };
+        
+        // Log detalhado de cada tarefa com mídia
+        if (task.mediaUrl) {
+          console.log('[FIREBASE] 📸 Tarefa com mídia recuperada:', {
+            id: task.id,
+            hasMediaUrl: !!task.mediaUrl,
+            mediaType: task.mediaType,
+            mediaUrlLength: task.mediaUrl?.length,
+            mediaSizeKB: task.mediaUrl ? ((task.mediaUrl.length * 3) / 4 / 1024).toFixed(0) : 0
+          });
+        }
+        
+        return task;
       });
       
-      console.log('[FIREBASE] 📥 Tarefas atualizadas:', tasks.length);
+      const tasksWithMedia = tasks.filter(t => t.mediaUrl).length;
+      console.log('[FIREBASE] 📥 Tarefas atualizadas:', tasks.length, `(${tasksWithMedia} com mídia)`);
       callback(tasks);
     }, (error) => {
       console.error('[FIREBASE] ❌ Erro no listener de tarefas:', error);
