@@ -14,19 +14,25 @@ const AudioRecorder: React.FC<AudioRecorderProps> = ({ onSendAudio }) => {
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
   const timerRef = useRef<NodeJS.Timeout | null>(null);
+  const streamRef = useRef<MediaStream | null>(null);
 
-  const { getAudioStream, hasPermission, error: permissionError } = useAudioPermission();
+  const { getAudioStream, stopAudioStream, error: permissionError } = useAudioPermission();
   
   // Limite máximo de gravação em segundos (60s = ~200-400KB em base64)
   const MAX_RECORDING_TIME = 60;
 
   useEffect(() => {
     return () => {
+      // Cleanup: parar timer e stream ao desmontar
       if (timerRef.current) {
         clearInterval(timerRef.current);
       }
+      if (streamRef.current) {
+        stopAudioStream(streamRef.current);
+        streamRef.current = null;
+      }
     };
-  }, []);
+  }, [stopAudioStream]);
 
   const formatTime = (seconds: number): string => {
     const mins = Math.floor(seconds / 60);
@@ -36,7 +42,10 @@ const AudioRecorder: React.FC<AudioRecorderProps> = ({ onSendAudio }) => {
 
   const startRecording = async () => {
     try {
+      // Solicita novo stream (ativa microfone)
       const stream = await getAudioStream();
+      streamRef.current = stream;
+      console.log('[AUDIO] Microfone ativado');
 
       let mimeType = 'audio/webm';
       if (MediaRecorder.isTypeSupported('audio/webm;codecs=opus')) {
@@ -57,6 +66,13 @@ const AudioRecorder: React.FC<AudioRecorderProps> = ({ onSendAudio }) => {
       };
 
       mediaRecorderRef.current.onstop = () => {
+        // Parar o stream imediatamente (desativa microfone)
+        if (streamRef.current) {
+          stopAudioStream(streamRef.current);
+          streamRef.current = null;
+          console.log('[AUDIO] Microfone desativado');
+        }
+
         if (!isCancelled && audioChunksRef.current.length > 0) {
           const blob = new Blob(audioChunksRef.current, {
             type: mediaRecorderRef.current?.mimeType || mimeType
@@ -189,19 +205,6 @@ const AudioRecorder: React.FC<AudioRecorderProps> = ({ onSendAudio }) => {
           >
             <MicIcon className="w-6 h-6" />
           </button>
-
-          {hasPermission && (
-            <div
-              className="absolute -top-1 -right-1 w-3 h-3 bg-green-500 rounded-full border-2 border-white dark:border-gray-800 shadow-lg"
-              title="Microfone pronto"
-            />
-          )}
-
-          {hasPermission && (
-            <span className="text-xs text-green-600 dark:text-green-400 hidden sm:inline font-medium">
-              Pronto
-            </span>
-          )}
 
           {permissionError && (
             <span className="text-xs text-red-600 dark:text-red-400">

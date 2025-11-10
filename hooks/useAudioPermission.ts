@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useCallback } from 'react';
 
 interface AudioPermissionState {
   hasPermission: boolean;
@@ -7,13 +7,10 @@ interface AudioPermissionState {
   stream: MediaStream | null;
 }
 
-const PERMISSION_STORAGE_KEY = 'audio_permission_granted';
-
 /**
- * Hook para gerenciar permissões de áudio de forma persistente.
- * Solicita permissão apenas uma vez e mantém o stream ativo,
- * evitando que o navegador (especialmente iOS Safari) peça
- * permissão repetidamente.
+ * Hook para gerenciar permissões de áudio sob demanda.
+ * Solicita permissão apenas quando necessário e não mantém stream ativo,
+ * economizando bateria.
  */
 export const useAudioPermission = () => {
   const [state, setState] = useState<AudioPermissionState>({
@@ -23,31 +20,15 @@ export const useAudioPermission = () => {
     stream: null
   });
 
-  const streamRef = useRef<MediaStream | null>(null);
-  const permissionRequestedRef = useRef(false);
-  const isRequestingRef = useRef(false);
-
-  // Limpar stream ao desmontar
-  useEffect(() => {
-    return () => {
-      if (streamRef.current) {
-        streamRef.current.getTracks().forEach(track => track.stop());
-        streamRef.current = null;
-      }
-    };
-  }, []);
-
-  const requestPermission = useCallback(async () => {
-    // Se já está solicitando ou já tem permissão, não fazer nada
-    if (isRequestingRef.current || (state.hasPermission && streamRef.current && streamRef.current.active)) {
-      return streamRef.current;
-    }
-
-    isRequestingRef.current = true;
+  /**
+   * Solicita permissão e cria um novo stream de áudio.
+   * Este stream deve ser parado manualmente após o uso para economizar bateria.
+   */
+  const getAudioStream = useCallback(async (): Promise<MediaStream> => {
     setState(prev => ({ ...prev, isRequesting: true, error: null }));
 
     try {
-      // Solicitar acesso ao microfone
+      // Sempre criar um novo stream para garantir que não mantemos microfone ativo
       const stream = await navigator.mediaDevices.getUserMedia({
         audio: {
           echoCancellation: true,
@@ -56,11 +37,6 @@ export const useAudioPermission = () => {
         }
       });
 
-      streamRef.current = stream;
-
-      // Salvar que obtivemos permissão com sucesso
-      localStorage.setItem(PERMISSION_STORAGE_KEY, 'true');
-
       setState({
         hasPermission: true,
         isRequesting: false,
@@ -68,13 +44,9 @@ export const useAudioPermission = () => {
         stream
       });
 
-      isRequestingRef.current = false;
       return stream;
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Erro desconhecido';
-
-      // Limpar permissão salva se houve erro
-      localStorage.removeItem(PERMISSION_STORAGE_KEY);
 
       setState({
         hasPermission: false,
@@ -83,62 +55,27 @@ export const useAudioPermission = () => {
         stream: null
       });
 
-      isRequestingRef.current = false;
       console.error('Erro ao solicitar permissão de áudio:', err);
       throw err;
     }
-  }, [state.hasPermission]);
+  }, []);
 
-  // Verificar se já temos permissão salva - executar apenas uma vez
-  useEffect(() => {
-    const savedPermission = localStorage.getItem(PERMISSION_STORAGE_KEY);
-
-    // Se já temos permissão salva, tentar obter o stream automaticamente
-    if (savedPermission === 'true' && !permissionRequestedRef.current) {
-      permissionRequestedRef.current = true;
-      requestPermission().catch(err => {
-        console.error('Erro ao solicitar permissão automática:', err);
+  /**
+   * Para todas as tracks de um stream de áudio.
+   * IMPORTANTE: Sempre chamar após terminar de usar o stream para economizar bateria.
+   */
+  const stopAudioStream = useCallback((stream: MediaStream | null) => {
+    if (stream) {
+      stream.getTracks().forEach(track => {
+        track.stop();
+        console.log('[AUDIO] Track parada:', track.label);
       });
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []); // Executar apenas uma vez na montagem
 
-  /**
-   * Obtém um clone do stream de áudio.
-   * Útil para criar múltiplas gravações sem solicitar permissão novamente.
-   */
-  const getAudioStream = useCallback(async (): Promise<MediaStream> => {
-    // Se já temos um stream, retornar ele
-    if (streamRef.current && streamRef.current.active) {
-      return streamRef.current;
-    }
-
-    // Caso contrário, solicitar permissão
-    const stream = await requestPermission();
-    if (!stream) {
-      throw new Error('Não foi possível obter stream de áudio');
-    }
-    return stream;
-  }, [requestPermission]);
-
-  /**
-   * Limpa a permissão salva e para o stream.
-   * Útil se o usuário quiser revogar a permissão manualmente.
-   */
-  const revokePermission = useCallback(() => {
-    if (streamRef.current) {
-      streamRef.current.getTracks().forEach(track => track.stop());
-      streamRef.current = null;
-    }
-
-    localStorage.removeItem(PERMISSION_STORAGE_KEY);
-
-    setState({
-      hasPermission: false,
-      isRequesting: false,
-      error: null,
+    setState(prev => ({
+      ...prev,
       stream: null
-    });
+    }));
   }, []);
 
   return {
@@ -146,8 +83,7 @@ export const useAudioPermission = () => {
     isRequesting: state.isRequesting,
     error: state.error,
     stream: state.stream,
-    requestPermission,
     getAudioStream,
-    revokePermission
+    stopAudioStream
   };
 };
