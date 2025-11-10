@@ -111,6 +111,7 @@ async function migrateData() {
           createdAt: goal.createdAt ? 
             (typeof goal.createdAt === 'string' ? Timestamp.fromDate(new Date(goal.createdAt)) : Timestamp.fromDate(goal.createdAt)) 
             : Timestamp.now(),
+          audioUrl: goal.audioUrl || null,
           author: goal.author || null,
         };
         

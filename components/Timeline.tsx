@@ -176,12 +176,19 @@ const Timeline: React.FC<TimelineProps> = ({ userRole, tasks, goals, goalComplet
                                     {isCompleted ? <CheckCircleIcon className="w-6 h-6 sm:w-7 sm:h-7 text-green-500" /> : <CircleIcon className="w-6 h-6 sm:w-7 sm:h-7 text-gray-400" />}
                                 </button>
                                 <div className="flex-grow min-w-0">
-                                    <span className={`text-sm sm:text-base leading-snug block ${isCompleted ? 'line-through text-gray-500' : 'text-gray-700 dark:text-gray-300'}`}>
-                                        {goal.description}
-                                    </span>
+                                    <div className="flex items-center gap-2 flex-wrap">
+                                        <span className={`text-sm sm:text-base leading-snug ${isCompleted ? 'line-through text-gray-500' : 'text-gray-700 dark:text-gray-300'}`}>
+                                            {goal.description}
+                                        </span>
+                                        {goal.audioUrl && (
+                                            <span className="text-[10px] sm:text-xs font-semibold bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 px-2 py-0.5 rounded-full whitespace-nowrap flex items-center gap-1">
+                                                🎵 Áudio
+                                            </span>
+                                        )}
+                                    </div>
                                     {goal.audioUrl && (
-                                        <div className="mt-2">
-                                            <audio controls src={goal.audioUrl} className="w-full max-w-xs" />
+                                        <div className="mt-2 p-2 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
+                                            <audio controls src={goal.audioUrl} className="w-full max-w-md h-8" />
                                         </div>
                                     )}
                                 </div>
