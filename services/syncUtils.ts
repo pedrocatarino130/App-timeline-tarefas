@@ -8,6 +8,85 @@
 import { Task, Reminder, Goal, GoalCompletion } from '../types';
 
 /**
+ * 🔥 TASK-002: Validação robusta de arrays
+ *
+ * Função standalone para validar e sanitizar arrays antes de processar.
+ * Previne crashes com .map() em undefined/null.
+ *
+ * @param field - Campo a ser validado
+ * @param defaultValue - Valor default se inválido (padrão: [])
+ * @returns Array válido ou default
+ */
+export const validateArrayField = <T = any>(
+  field: any,
+  defaultValue: T[] = []
+): T[] => {
+  // Verifica se é null ou undefined
+  if (field === null || field === undefined) {
+    console.warn('[VALIDATE] Campo null/undefined, usando default:', defaultValue);
+    return defaultValue;
+  }
+
+  // Verifica se é array
+  if (!Array.isArray(field)) {
+    console.warn('[VALIDATE] Campo não é array, usando default:', typeof field);
+    return defaultValue;
+  }
+
+  // Filtra items null/undefined do array
+  const filtered = field.filter((item: any) => item !== null && item !== undefined);
+
+  // Avisa se houve filtragem
+  if (filtered.length !== field.length) {
+    console.warn(`[VALIDATE] ${field.length - filtered.length} items null/undefined removidos`);
+  }
+
+  return filtered;
+};
+
+/**
+ * 🔥 TASK-002: Type guard para validar se objeto tem ID válido
+ */
+export const hasValidId = (obj: any): obj is { id: string } => {
+  return obj && typeof obj === 'object' && typeof obj.id === 'string' && obj.id.length > 0;
+};
+
+/**
+ * 🔥 TASK-002: Type guard para validar estrutura de Task
+ */
+export const isValidTask = (obj: any): obj is Task => {
+  return (
+    hasValidId(obj) &&
+    typeof obj.description === 'string' &&
+    (obj.timestamp instanceof Date || typeof obj.timestamp === 'string')
+  );
+};
+
+/**
+ * 🔥 TASK-002: Type guard para validar estrutura de Reminder
+ */
+export const isValidReminder = (obj: any): obj is Reminder => {
+  return (
+    hasValidId(obj) &&
+    (obj.type === 'text' || obj.type === 'audio') &&
+    typeof obj.content === 'string' &&
+    (obj.timestamp instanceof Date || typeof obj.timestamp === 'string')
+  );
+};
+
+/**
+ * 🔥 TASK-002: Type guard para validar estrutura de Goal
+ */
+export const isValidGoal = (obj: any): obj is Goal => {
+  return (
+    hasValidId(obj) &&
+    typeof obj.description === 'string' &&
+    (obj.type === 'unique' || obj.type === 'fixed') &&
+    (obj.createdAt instanceof Date || typeof obj.createdAt === 'string')
+  );
+};
+
+/**
  * 🔥 FIX #1: Hash de dados para detectar mudanças REAIS
  *
  * Calcula um hash rápido dos dados para comparação.
@@ -22,11 +101,11 @@ export const hashData = (data: {
   goals: Goal[];
   goalCompletions: GoalCompletion[];
 }): string => {
-  // 🔥 FIX: Valida arrays antes de processar
-  const safeTasks = Array.isArray(data.tasks) ? data.tasks : [];
-  const safeReminders = Array.isArray(data.reminders) ? data.reminders : [];
-  const safeGoals = Array.isArray(data.goals) ? data.goals : [];
-  const safeGoalCompletions = Array.isArray(data.goalCompletions) ? data.goalCompletions : [];
+  // 🔥 TASK-002: Usa validateArrayField para validação robusta
+  const safeTasks = validateArrayField<Task>(data.tasks, []);
+  const safeReminders = validateArrayField<Reminder>(data.reminders, []);
+  const safeGoals = validateArrayField<Goal>(data.goals, []);
+  const safeGoalCompletions = validateArrayField<GoalCompletion>(data.goalCompletions, []);
 
   // Cria uma string estável dos dados (sem depender de ordem de propriedades)
   const normalize = (obj: any): string => {
@@ -84,9 +163,9 @@ export const mergeLWW = <T extends { id: string; _updatedAt?: number }>(
   existingArray: T[] | undefined | null,
   newArray: T[] | undefined | null
 ): T[] => {
-  // 🔥 FIX: Valida arrays para prevenir crashes com undefined/null
-  const safeExisting = Array.isArray(existingArray) ? existingArray : [];
-  const safeNew = Array.isArray(newArray) ? newArray : [];
+  // 🔥 TASK-002: Usa validateArrayField para validação robusta
+  const safeExisting = validateArrayField<T>(existingArray, []);
+  const safeNew = validateArrayField<T>(newArray, []);
 
   console.log(`[MERGE] Merging ${safeExisting.length} existing + ${safeNew.length} new items`);
 
@@ -94,8 +173,8 @@ export const mergeLWW = <T extends { id: string; _updatedAt?: number }>(
 
   // Adiciona itens existentes ao mapa
   safeExisting.forEach(item => {
-    // 🔥 FIX: Valida que o item tem ID válido
-    if (item && item.id) {
+    // 🔥 TASK-002: Usa type guard hasValidId
+    if (hasValidId(item)) {
       merged.set(item.id, item);
     } else {
       console.warn('[MERGE] Item sem ID detectado no array existente:', item);
@@ -104,8 +183,8 @@ export const mergeLWW = <T extends { id: string; _updatedAt?: number }>(
 
   // Para cada item novo, verifica se é mais recente
   safeNew.forEach(newItem => {
-    // 🔥 FIX: Valida que o item tem ID válido
-    if (!newItem || !newItem.id) {
+    // 🔥 TASK-002: Usa type guard hasValidId
+    if (!hasValidId(newItem)) {
       console.warn('[MERGE] Item sem ID detectado no array novo:', newItem);
       return;
     }

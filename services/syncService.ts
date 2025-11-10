@@ -14,7 +14,8 @@ import {
   addTimestamps,
   isValidDate,
   dateToString,
-  stringToDate
+  stringToDate,
+  validateArrayField
 } from './syncUtils';
 
 // Chaves para localStorage
@@ -54,6 +55,7 @@ export interface UserData {
   goalCompletions: GoalCompletion[];
   lastUpdated: number;
   lastDeviceId?: string; // ID do dispositivo que fez a última atualização
+  version?: number; // 🔥 TASK-003: Versionamento incremental do documento
 }
 
 // Carrega dados do localStorage
@@ -123,11 +125,11 @@ const sanitizeData = (data: UserData): any => {
   const now = new Date();
   const timestamp = Date.now();
 
-  // 🔥 FIX: Valida arrays antes de processar
-  const safeTasks = Array.isArray(data.tasks) ? data.tasks : [];
-  const safeReminders = Array.isArray(data.reminders) ? data.reminders : [];
-  const safeGoals = Array.isArray(data.goals) ? data.goals : [];
-  const safeGoalCompletions = Array.isArray(data.goalCompletions) ? data.goalCompletions : [];
+  // 🔥 TASK-002: Usa validateArrayField para validação robusta
+  const safeTasks = validateArrayField<Task>(data.tasks, []);
+  const safeReminders = validateArrayField<Reminder>(data.reminders, []);
+  const safeGoals = validateArrayField<Goal>(data.goals, []);
+  const safeGoalCompletions = validateArrayField<GoalCompletion>(data.goalCompletions, []);
 
   return {
     tasks: safeTasks.map(task => ({
@@ -209,27 +211,28 @@ export const saveToFirebase = async (
           ...sanitizedData,
           lastUpdated: Date.now(),
           lastDeviceId: deviceId,
+          version: 1, // 🔥 TASK-003: Primeira versão
         });
+        console.log('🔢 [SYNC] Versão inicial: 1');
       } else {
         console.log('🔄 [SYNC] Documento existe, fazendo merge...');
         // Se existe, faz merge inteligente dos arrays
         const existingData = docSnapshot.data() as UserData;
 
-        // 🔥 FIX: Valida dados existentes antes de fazer merge
-        const existingTasks = Array.isArray(existingData.tasks) ? existingData.tasks : [];
-        const existingReminders = Array.isArray(existingData.reminders) ? existingData.reminders : [];
-        const existingGoals = Array.isArray(existingData.goals) ? existingData.goals : [];
-        const existingGoalCompletions = Array.isArray(existingData.goalCompletions) ? existingData.goalCompletions : [];
-
-        if (!Array.isArray(existingData.tasks)) {
-          console.warn('[SYNC] ⚠️ existingData.tasks não é array, usando [] para merge');
-        }
-        if (!Array.isArray(existingData.goals)) {
-          console.warn('[SYNC] ⚠️ existingData.goals não é array, usando [] para merge');
-        }
+        // 🔥 TASK-002: Valida dados existentes usando validateArrayField
+        const existingTasks = validateArrayField<Task>(existingData.tasks, []);
+        const existingReminders = validateArrayField<Reminder>(existingData.reminders, []);
+        const existingGoals = validateArrayField<Goal>(existingData.goals, []);
+        const existingGoalCompletions = validateArrayField<GoalCompletion>(existingData.goalCompletions, []);
 
         console.log(`[SYNC] 📊 Merge: ${existingTasks.length} tasks + ${sanitizedData.tasks.length} novos`);
         console.log(`[SYNC] 📊 Merge: ${existingGoals.length} goals + ${sanitizedData.goals.length} novos`);
+
+        // 🔥 TASK-003: Incrementa versão do documento
+        const currentVersion = existingData.version || 0;
+        const newVersion = currentVersion + 1;
+
+        console.log(`🔢 [SYNC] Versão: ${currentVersion} → ${newVersion}`);
 
         const mergedData: UserData = {
           tasks: mergeArraysById(existingTasks, sanitizedData.tasks),
@@ -238,6 +241,7 @@ export const saveToFirebase = async (
           goalCompletions: mergeArraysById(existingGoalCompletions, sanitizedData.goalCompletions),
           lastUpdated: Date.now(),
           lastDeviceId: deviceId,
+          version: newVersion, // 🔥 TASK-003: Versão incrementada
         };
 
         console.log(`[SYNC] ✅ Resultado do merge: ${mergedData.tasks.length} tasks, ${mergedData.goals.length} goals`);
@@ -332,17 +336,11 @@ export const loadFromFirebase = async (): Promise<UserData | null> => {
         console.log(`📋 [SYNC] Metas carregadas:`, data.goals.map(g => ({ id: g.id, desc: g.description?.substring(0, 30) })));
       }
 
-      // 🔥 FIX #4: Reconverte ISO strings para objetos Date
-      // 🔥 FIX: Valida arrays antes de processar para prevenir crashes
-      const safeTasks = Array.isArray(data.tasks) ? data.tasks : [];
-      const safeReminders = Array.isArray(data.reminders) ? data.reminders : [];
-      const safeGoals = Array.isArray(data.goals) ? data.goals : [];
-      const safeGoalCompletions = Array.isArray(data.goalCompletions) ? data.goalCompletions : [];
-
-      if (!Array.isArray(data.tasks)) console.warn('[SYNC] ⚠️ data.tasks não é array:', data.tasks);
-      if (!Array.isArray(data.reminders)) console.warn('[SYNC] ⚠️ data.reminders não é array:', data.reminders);
-      if (!Array.isArray(data.goals)) console.warn('[SYNC] ⚠️ data.goals não é array:', data.goals);
-      if (!Array.isArray(data.goalCompletions)) console.warn('[SYNC] ⚠️ data.goalCompletions não é array:', data.goalCompletions);
+      // 🔥 TASK-002: Valida arrays usando validateArrayField
+      const safeTasks = validateArrayField<any>(data.tasks, []);
+      const safeReminders = validateArrayField<any>(data.reminders, []);
+      const safeGoals = validateArrayField<any>(data.goals, []);
+      const safeGoalCompletions = validateArrayField<any>(data.goalCompletions, []);
 
       return {
         tasks: safeTasks.map((task: any) => ({
@@ -411,17 +409,11 @@ export const syncWithFirebase = (
           console.log(`📋 [SYNC] Metas recebidas via listener:`, data.goals.map(g => ({ id: g.id, desc: g.description?.substring(0, 30) })));
         }
 
-        // 🔥 FIX #4: Reconverte ISO strings para objetos Date
-        // 🔥 FIX: Valida arrays antes de processar para prevenir crashes
-        const safeTasks = Array.isArray(data.tasks) ? data.tasks : [];
-        const safeReminders = Array.isArray(data.reminders) ? data.reminders : [];
-        const safeGoals = Array.isArray(data.goals) ? data.goals : [];
-        const safeGoalCompletions = Array.isArray(data.goalCompletions) ? data.goalCompletions : [];
-
-        if (!Array.isArray(data.tasks)) console.warn('[SYNC LISTENER] ⚠️ data.tasks não é array:', data.tasks);
-        if (!Array.isArray(data.reminders)) console.warn('[SYNC LISTENER] ⚠️ data.reminders não é array:', data.reminders);
-        if (!Array.isArray(data.goals)) console.warn('[SYNC LISTENER] ⚠️ data.goals não é array:', data.goals);
-        if (!Array.isArray(data.goalCompletions)) console.warn('[SYNC LISTENER] ⚠️ data.goalCompletions não é array:', data.goalCompletions);
+        // 🔥 TASK-002: Valida arrays usando validateArrayField
+        const safeTasks = validateArrayField<any>(data.tasks, []);
+        const safeReminders = validateArrayField<any>(data.reminders, []);
+        const safeGoals = validateArrayField<any>(data.goals, []);
+        const safeGoalCompletions = validateArrayField<any>(data.goalCompletions, []);
 
         const convertedData: UserData = {
           tasks: safeTasks.map((task: any) => ({
