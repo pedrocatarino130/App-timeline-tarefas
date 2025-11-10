@@ -13,6 +13,7 @@ import {
   getDeviceId,
 } from './services/syncService';
 import { hashData, getAdaptiveDebounce, mergeLWW, mergeLWWGoalCompletions } from './services/syncUtils';
+import { initLogger, getLogger } from './services/syncLogger';
 import { db } from './firebase.config';
 
 // Default initial data (used only if localStorage is empty)
@@ -55,6 +56,25 @@ function App() {
   const pendingSaveTimestamp = useRef(0); // 🔥 FIX: Timestamp do save pendente
   const dataHashRef = useRef<string>(''); // 🔥 FIX #1: Hash dos dados para detectar mudanças REAIS
   const changeCountRef = useRef(0); // 🔥 FIX #5: Contador de mudanças para debounce adaptativo
+
+  // 🔥 TASK-006: Inicializa logger
+  useEffect(() => {
+    const deviceId = getDeviceId();
+    initLogger(deviceId);
+    const logger = getLogger();
+    logger.info('App inicializado', { deviceId, hasFirebase: !!db });
+
+    // Detecta loop infinito a cada 30 segundos
+    const loopCheckInterval = setInterval(() => {
+      const loopCheck = logger.detectLoopPattern();
+      if (loopCheck.detected) {
+        logger.error('LOOP INFINITO DETECTADO!', loopCheck.details);
+        alert(`⚠️ ALERTA: ${loopCheck.details}\n\nVerifique o console para mais detalhes.`);
+      }
+    }, 30000);
+
+    return () => clearInterval(loopCheckInterval);
+  }, []);
 
   // Detector de online/offline
   useEffect(() => {
@@ -256,6 +276,14 @@ function App() {
       return;
     }
 
+    // 🔥 TASK-006: Log de mudança com hash
+    const logger = getLogger();
+    logger.info('Hash mudou - mudança detectada', {
+      oldHash: dataHashRef.current.substring(0, 8),
+      newHash: currentHash.substring(0, 8),
+      changeCount: changeCountRef.current + 1
+    }, currentHash);
+
     console.log(`[SAVE ${new Date().toISOString()}] 🔄 Hash mudou: ${dataHashRef.current.substring(0, 8)} → ${currentHash.substring(0, 8)}`);
     dataHashRef.current = currentHash;
 
@@ -265,6 +293,7 @@ function App() {
     pendingSaveTimestamp.current = changeTimestamp; // 🔥 FIX CRÍTICO: Marca save pendente IMEDIATAMENTE (fecha janela crítica)
     changeCountRef.current++; // Incrementa contador de mudanças
 
+    logger.debug('Save pendente marcado', { timestamp: changeTimestamp, count: changeCountRef.current });
     console.log(`[SAVE ${new Date().toISOString()}] 🔄 Mudança local detectada (timestamp: ${changeTimestamp}, count: ${changeCountRef.current})`);
     console.log(`[SAVE] 🔒 Save pendente marcado ANTES do debounce (previne sobrescrita do listener)`);
 
@@ -274,8 +303,9 @@ function App() {
     saveToLocalStorage(STORAGE_KEYS.GOALS, goals);
     saveToLocalStorage(STORAGE_KEYS.GOAL_COMPLETIONS, goalCompletions);
 
-    // 🔥 FIX #5: Debounce adaptativo baseado na frequência de mudanças
-    const debounceTime = getAdaptiveDebounce(changeCountRef.current);
+    // 🔥 TASK-005: Debounce FIXO de 1000ms (não mais adaptativo)
+    const debounceTime = 1000; // 🔥 TASK-005: Fixo em 1000ms
+    logger.debug('Debounce configurado', { debounceMs: debounceTime, changeCount: changeCountRef.current });
     console.log(`[SAVE] ⏱️ Debounce de ${debounceTime}ms (mudanças: ${changeCountRef.current})`);
 
     if (syncTimeoutRef.current) {
@@ -285,6 +315,17 @@ function App() {
     syncTimeoutRef.current = setTimeout(async () => {
       // pendingSaveTimestamp já foi setado acima (antes do debounce)
       const timestamp = Date.now();
+      const logger = getLogger();
+
+      // 🔥 TASK-006: Performance profiling
+      logger.startTimer('saveToFirebase');
+      logger.info('Iniciando save no Firebase', {
+        tasksCount: tasks.length,
+        remindersCount: reminders.length,
+        goalsCount: goals.length,
+        completionsCount: goalCompletions.length
+      });
+
       console.log(`[SAVE ${new Date().toISOString()}] 💾 Salvando no Firebase (timestamp: ${timestamp})...`);
       console.log(`[SAVE] 📊 ${tasks.length} tarefas, ${reminders.length} lembretes, ${goals.length} metas, ${goalCompletions.length} conclusões`);
       setIsSyncing(true);
@@ -300,8 +341,12 @@ function App() {
 
       const result = await saveToFirebase(userData);
 
+      // 🔥 TASK-006: Fim do profiling
+      const duration = logger.endTimer('saveToFirebase');
+
       if (result.success) {
         lastSyncTime.current = timestamp;
+        logger.info('Save concluído com sucesso', { durationMs: duration.toFixed(2) });
         console.log(`[SAVE ${new Date().toISOString()}] ✅ Salvo com sucesso!`);
         setFirebaseError(null); // Limpa qualquer erro anterior
         changeCountRef.current = 0; // 🔥 FIX #5: Reseta contador após save bem-sucedido
@@ -309,6 +354,7 @@ function App() {
       } else {
         // Se falhou, mostra o erro específico retornado
         const errorMessage = result.error || 'Erro ao sincronizar com Firebase. Dados salvos localmente.';
+        logger.error('Save falhou', { error: errorMessage, durationMs: duration.toFixed(2) });
         console.error(`[SAVE ${new Date().toISOString()}] ❌ Falha:`, errorMessage);
         setFirebaseError(errorMessage);
         pendingSaveTimestamp.current = 0; // 🔥 FIX: Limpa pendência se falhou
