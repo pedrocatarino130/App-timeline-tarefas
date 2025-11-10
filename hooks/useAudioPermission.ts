@@ -25,17 +25,7 @@ export const useAudioPermission = () => {
 
   const streamRef = useRef<MediaStream | null>(null);
   const permissionRequestedRef = useRef(false);
-
-  // Verificar se já temos permissão salva
-  useEffect(() => {
-    const savedPermission = localStorage.getItem(PERMISSION_STORAGE_KEY);
-
-    // Se já temos permissão salva, tentar obter o stream automaticamente
-    if (savedPermission === 'true' && !permissionRequestedRef.current) {
-      permissionRequestedRef.current = true;
-      requestPermission();
-    }
-  }, []);
+  const isRequestingRef = useRef(false);
 
   // Limpar stream ao desmontar
   useEffect(() => {
@@ -49,10 +39,11 @@ export const useAudioPermission = () => {
 
   const requestPermission = useCallback(async () => {
     // Se já está solicitando ou já tem permissão, não fazer nada
-    if (state.isRequesting || (state.hasPermission && streamRef.current)) {
+    if (isRequestingRef.current || (state.hasPermission && streamRef.current && streamRef.current.active)) {
       return streamRef.current;
     }
 
+    isRequestingRef.current = true;
     setState(prev => ({ ...prev, isRequesting: true, error: null }));
 
     try {
@@ -77,6 +68,7 @@ export const useAudioPermission = () => {
         stream
       });
 
+      isRequestingRef.current = false;
       return stream;
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Erro desconhecido';
@@ -91,10 +83,25 @@ export const useAudioPermission = () => {
         stream: null
       });
 
+      isRequestingRef.current = false;
       console.error('Erro ao solicitar permissão de áudio:', err);
       throw err;
     }
-  }, [state.isRequesting, state.hasPermission]);
+  }, [state.hasPermission]);
+
+  // Verificar se já temos permissão salva - executar apenas uma vez
+  useEffect(() => {
+    const savedPermission = localStorage.getItem(PERMISSION_STORAGE_KEY);
+
+    // Se já temos permissão salva, tentar obter o stream automaticamente
+    if (savedPermission === 'true' && !permissionRequestedRef.current) {
+      permissionRequestedRef.current = true;
+      requestPermission().catch(err => {
+        console.error('Erro ao solicitar permissão automática:', err);
+      });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // Executar apenas uma vez na montagem
 
   /**
    * Obtém um clone do stream de áudio.
