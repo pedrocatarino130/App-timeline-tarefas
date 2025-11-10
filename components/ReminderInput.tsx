@@ -46,7 +46,7 @@ const ReminderInput: React.FC<ReminderInputProps> = ({ onSend }) => {
           onChange={(e) => setText(e.target.value)}
           onKeyDown={(e) => e.key === 'Enter' && handleSendText()}
           placeholder="Enviar um lembrete..."
-          className="flex-grow p-3 border border-gray-300 rounded-full focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white text-base"
+          className="flex-grow p-3 border border-gray-300 rounded-full focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white text-gray-900 text-base bg-white"
         />
         {/* Manter ambos os botões sempre renderizados para evitar mudança de posição */}
         <div className="relative flex-shrink-0">
