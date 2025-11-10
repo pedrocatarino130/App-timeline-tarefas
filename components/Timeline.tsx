@@ -21,6 +21,7 @@ interface TimelineProps {
 const Timeline: React.FC<TimelineProps> = ({ userRole, tasks, goals, goalCompletions, onAddTask, onDeleteTask, onAddGoal, onToggleGoalCompletion, onDeleteGoal, onSendReminder }) => {
   const [showTaskForm, setShowTaskForm] = useState(false);
   const [showGoalForm, setShowGoalForm] = useState(false);
+  const [expandedAudioGoals, setExpandedAudioGoals] = useState<Set<string>>(new Set());
   const [viewingMedia, setViewingMedia] = useState<{ url: string, type: 'image' | 'video' } | null>(null);
   const [commentingTask, setCommentingTask] = useState<string | null>(null);
   const [commentText, setCommentText] = useState('');
@@ -170,6 +171,20 @@ const Timeline: React.FC<TimelineProps> = ({ userRole, tasks, goals, goalComplet
                 ) : (
                     dailyGoals.map(goal => {
                         const isCompleted = goalCompletionMap.get(goal.id) || false;
+                        const isAudioExpanded = expandedAudioGoals.has(goal.id);
+                        
+                        const toggleAudio = () => {
+                            setExpandedAudioGoals(prev => {
+                                const newSet = new Set(prev);
+                                if (newSet.has(goal.id)) {
+                                    newSet.delete(goal.id);
+                                } else {
+                                    newSet.add(goal.id);
+                                }
+                                return newSet;
+                            });
+                        };
+                        
                         return (
                             <div key={goal.id} className="flex items-start gap-2 sm:gap-3 group p-2 sm:p-2.5 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors">
                                 <button onClick={() => onToggleGoalCompletion(goal.id)} disabled={userRole !== 'Executor'} className="disabled:cursor-not-allowed flex-shrink-0 active:scale-90 transition-transform mt-0.5">
@@ -181,14 +196,17 @@ const Timeline: React.FC<TimelineProps> = ({ userRole, tasks, goals, goalComplet
                                             {goal.description}
                                         </span>
                                         {goal.audioUrl && (
-                                            <span className="text-[10px] sm:text-xs font-semibold bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 px-2 py-0.5 rounded-full whitespace-nowrap flex items-center gap-1">
-                                                🎵 Áudio
-                                            </span>
+                                            <button
+                                                onClick={toggleAudio}
+                                                className="text-[10px] sm:text-xs font-semibold bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 px-2 py-0.5 rounded-full whitespace-nowrap flex items-center gap-1 hover:bg-blue-200 dark:hover:bg-blue-900/50 transition-colors active:scale-95"
+                                            >
+                                                {isAudioExpanded ? '🔊' : '🎵'} {isAudioExpanded ? 'Fechar' : 'Áudio'}
+                                            </button>
                                         )}
                                     </div>
-                                    {goal.audioUrl && (
+                                    {goal.audioUrl && isAudioExpanded && (
                                         <div className="mt-2 p-2 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
-                                            <audio controls src={goal.audioUrl} className="w-full max-w-md h-8" />
+                                            <audio controls src={goal.audioUrl} className="w-full max-w-md h-8" autoPlay />
                                         </div>
                                     )}
                                 </div>
