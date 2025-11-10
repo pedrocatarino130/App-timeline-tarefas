@@ -400,6 +400,7 @@ export const subscribeToGoals = (callback: (goals: Goal[]) => void): Unsubscribe
           description: data.description || '',
           type: data.type || 'unique',
           createdAt: data.createdAt?.toDate() || new Date(),
+          audioUrl: data.audioUrl,
           author: data.author,
         };
       });
