@@ -11,6 +11,7 @@ import { db } from '../firebase.config';
 import { Task, Reminder, Goal, GoalCompletion } from '../types';
 import {
   mergeLWW,
+  mergeLWWGoalCompletions,
   addTimestamps,
   isValidDate,
   dateToString,
@@ -171,6 +172,13 @@ const mergeArraysById = <T extends { id: string; _updatedAt?: number }>(
   return mergeLWW(existingArray, newArray);
 };
 
+const mergeGoalCompletions = (
+  existingArray: GoalCompletion[],
+  newArray: GoalCompletion[]
+): GoalCompletion[] => {
+  return mergeLWWGoalCompletions(existingArray, newArray);
+};
+
 // Salva todos os dados no Firebase (workspace compartilhado) usando transação
 export const saveToFirebase = async (
   data: UserData
@@ -238,7 +246,7 @@ export const saveToFirebase = async (
           tasks: mergeArraysById(existingTasks, sanitizedData.tasks),
           reminders: mergeArraysById(existingReminders, sanitizedData.reminders),
           goals: mergeArraysById(existingGoals, sanitizedData.goals),
-          goalCompletions: mergeArraysById(existingGoalCompletions, sanitizedData.goalCompletions),
+          goalCompletions: mergeGoalCompletions(existingGoalCompletions, sanitizedData.goalCompletions),
           lastUpdated: Date.now(),
           lastDeviceId: deviceId,
           version: newVersion, // 🔥 TASK-003: Versão incrementada

@@ -12,7 +12,7 @@ import {
   UserData,
   getDeviceId,
 } from './services/syncService';
-import { hashData, getAdaptiveDebounce, mergeLWW } from './services/syncUtils';
+import { hashData, getAdaptiveDebounce, mergeLWW, mergeLWWGoalCompletions } from './services/syncUtils';
 import { db } from './firebase.config';
 
 // Default initial data (used only if localStorage is empty)
@@ -100,7 +100,7 @@ function App() {
         setTasks(prev => mergeLWW(prev, firebaseData.tasks));
         setReminders(prev => mergeLWW(prev, firebaseData.reminders));
         setGoals(prev => mergeLWW(prev, firebaseData.goals));
-        setGoalCompletions(prev => mergeLWW(prev, firebaseData.goalCompletions));
+        setGoalCompletions(prev => mergeLWWGoalCompletions(prev, firebaseData.goalCompletions));
 
         lastLocalChangeTimestamp.current = firebaseData.lastUpdated || 0; // 🔥 FIX: Marca quando foi a última atualização
         // Flag será resetada após timeout de 3 segundos para cobrir debounce completo (máximo é 1000ms + margem)
@@ -187,7 +187,7 @@ function App() {
           return mergedGoals;
         });
         setGoalCompletions(prev => {
-          mergedGoalCompletions = mergeLWW(prev, data.goalCompletions);
+          mergedGoalCompletions = mergeLWWGoalCompletions(prev, data.goalCompletions);
           console.log(`[SYNC] 🔀 GoalCompletions: ${prev.length} local + ${data.goalCompletions.length} Firebase → ${mergedGoalCompletions.length} merged`);
           return mergedGoalCompletions;
         });

@@ -56,7 +56,10 @@ export const hasValidId = (obj: any): obj is { id: string } => {
  */
 export const isValidTask = (obj: any): obj is Task => {
   return (
-    hasValidId(obj) &&
+    obj &&
+    typeof obj === 'object' &&
+    typeof obj.id === 'string' &&
+    obj.id.length > 0 &&
     typeof obj.description === 'string' &&
     (obj.timestamp instanceof Date || typeof obj.timestamp === 'string')
   );
@@ -67,7 +70,10 @@ export const isValidTask = (obj: any): obj is Task => {
  */
 export const isValidReminder = (obj: any): obj is Reminder => {
   return (
-    hasValidId(obj) &&
+    obj &&
+    typeof obj === 'object' &&
+    typeof obj.id === 'string' &&
+    obj.id.length > 0 &&
     (obj.type === 'text' || obj.type === 'audio') &&
     typeof obj.content === 'string' &&
     (obj.timestamp instanceof Date || typeof obj.timestamp === 'string')
@@ -79,10 +85,26 @@ export const isValidReminder = (obj: any): obj is Reminder => {
  */
 export const isValidGoal = (obj: any): obj is Goal => {
   return (
-    hasValidId(obj) &&
+    obj &&
+    typeof obj === 'object' &&
+    typeof obj.id === 'string' &&
+    obj.id.length > 0 &&
     typeof obj.description === 'string' &&
     (obj.type === 'unique' || obj.type === 'fixed') &&
     (obj.createdAt instanceof Date || typeof obj.createdAt === 'string')
+  );
+};
+
+/**
+ * 🔥 TASK-002: Type guard para validar estrutura de GoalCompletion
+ */
+export const isValidGoalCompletion = (obj: any): obj is GoalCompletion => {
+  return (
+    obj &&
+    typeof obj === 'object' &&
+    typeof obj.goalId === 'string' &&
+    typeof obj.date === 'string' &&
+    typeof obj.completed === 'boolean'
   );
 };
 
@@ -210,6 +232,68 @@ export const mergeLWW = <T extends { id: string; _updatedAt?: number }>(
 
   const result = Array.from(merged.values());
   console.log(`[MERGE] Result: ${result.length} items after merge`);
+  return result;
+};
+
+/**
+ * 🔥 TASK-002: Merge LWW específico para GoalCompletion
+ *
+ * GoalCompletion usa chave composta (goalId + date) em vez de um único id.
+ *
+ * @param existingArray - Array existente no Firebase
+ * @param newArray - Array novo do dispositivo local
+ * @returns Array com merge inteligente
+ */
+export const mergeLWWGoalCompletions = (
+  existingArray: GoalCompletion[] | undefined | null,
+  newArray: GoalCompletion[] | undefined | null
+): GoalCompletion[] => {
+  // 🔥 TASK-002: Usa validateArrayField para validação robusta
+  const safeExisting = validateArrayField<GoalCompletion>(existingArray, []);
+  const safeNew = validateArrayField<GoalCompletion>(newArray, []);
+
+  console.log(`[MERGE COMPLETIONS] Merging ${safeExisting.length} existing + ${safeNew.length} new items`);
+
+  const merged = new Map<string, GoalCompletion>();
+
+  // Adiciona itens existentes ao mapa (chave: goalId + date)
+  safeExisting.forEach(item => {
+    if (isValidGoalCompletion(item)) {
+      const key = `${item.goalId}::${item.date}`;
+      merged.set(key, item);
+    } else {
+      console.warn('[MERGE COMPLETIONS] Item inválido no array existente:', item);
+    }
+  });
+
+  // Para cada item novo, verifica se é mais recente
+  safeNew.forEach(newItem => {
+    if (!isValidGoalCompletion(newItem)) {
+      console.warn('[MERGE COMPLETIONS] Item inválido no array novo:', newItem);
+      return;
+    }
+
+    const key = `${newItem.goalId}::${newItem.date}`;
+    const existing = merged.get(key);
+
+    // Se não existe, adiciona
+    if (!existing) {
+      merged.set(key, newItem);
+      return;
+    }
+
+    // Compara timestamps
+    const existingTimestamp = existing._updatedAt || 0;
+    const newTimestamp = newItem._updatedAt || 0;
+
+    // Versão mais recente vence
+    if (newTimestamp >= existingTimestamp) {
+      merged.set(key, newItem);
+    }
+  });
+
+  const result = Array.from(merged.values());
+  console.log(`[MERGE COMPLETIONS] Result: ${result.length} items after merge`);
   return result;
 };
 
