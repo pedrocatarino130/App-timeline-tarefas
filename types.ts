@@ -36,6 +36,7 @@ export interface Goal {
   description: string;
   type: GoalType;
   createdAt: Date;
+  audioUrl?: string; // URL do áudio em base64 (opcional)
   author?: UserRole; // Quem criou a meta (Pedro ou Sato)
   _updatedAt?: number; // 🔥 Timestamp da última modificação DESTE item (para merge LWW)
 }

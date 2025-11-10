@@ -12,7 +12,7 @@ interface TimelineProps {
   goalCompletions: GoalCompletion[];
   onAddTask: (description: string, mediaUrl?: string, mediaType?: 'image' | 'video') => void;
   onDeleteTask: (taskId: string) => void;
-  onAddGoal: (description: string, type: GoalType) => void;
+  onAddGoal: (description: string, type: GoalType, audioUrl?: string) => void;
   onToggleGoalCompletion: (goalId: string) => void;
   onDeleteGoal: (goalId: string) => void;
   onSendReminder: (reminder: Omit<Reminder, 'id' | 'timestamp' | 'status'>) => void;
@@ -70,8 +70,8 @@ const Timeline: React.FC<TimelineProps> = ({ userRole, tasks, goals, goalComplet
     }
   };
 
-  const handleAddGoal = (description: string, type: GoalType) => {
-    onAddGoal(description, type);
+  const handleAddGoal = (description: string, type: GoalType, audioUrl?: string) => {
+    onAddGoal(description, type, audioUrl);
     setShowGoalForm(false);
   }
 
@@ -171,14 +171,21 @@ const Timeline: React.FC<TimelineProps> = ({ userRole, tasks, goals, goalComplet
                     dailyGoals.map(goal => {
                         const isCompleted = goalCompletionMap.get(goal.id) || false;
                         return (
-                            <div key={goal.id} className="flex items-center gap-2 sm:gap-3 group p-2 sm:p-2.5 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors">
-                                <button onClick={() => onToggleGoalCompletion(goal.id)} disabled={userRole !== 'Executor'} className="disabled:cursor-not-allowed flex-shrink-0 active:scale-90 transition-transform">
+                            <div key={goal.id} className="flex items-start gap-2 sm:gap-3 group p-2 sm:p-2.5 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors">
+                                <button onClick={() => onToggleGoalCompletion(goal.id)} disabled={userRole !== 'Executor'} className="disabled:cursor-not-allowed flex-shrink-0 active:scale-90 transition-transform mt-0.5">
                                     {isCompleted ? <CheckCircleIcon className="w-6 h-6 sm:w-7 sm:h-7 text-green-500" /> : <CircleIcon className="w-6 h-6 sm:w-7 sm:h-7 text-gray-400" />}
                                 </button>
-                                <span className={`flex-grow text-sm sm:text-base leading-snug ${isCompleted ? 'line-through text-gray-500' : 'text-gray-700 dark:text-gray-300'}`}>
-                                    {goal.description}
-                                </span>
-                                {goal.type === 'fixed' && <span className="ml-1 text-[10px] sm:text-xs font-bold bg-gray-200 dark:bg-gray-600 text-gray-600 dark:text-gray-300 px-2 py-1 rounded-full whitespace-nowrap">Fixa</span>}
+                                <div className="flex-grow min-w-0">
+                                    <span className={`text-sm sm:text-base leading-snug block ${isCompleted ? 'line-through text-gray-500' : 'text-gray-700 dark:text-gray-300'}`}>
+                                        {goal.description}
+                                    </span>
+                                    {goal.audioUrl && (
+                                        <div className="mt-2">
+                                            <audio controls src={goal.audioUrl} className="w-full max-w-xs" />
+                                        </div>
+                                    )}
+                                </div>
+                                {goal.type === 'fixed' && <span className="ml-1 text-[10px] sm:text-xs font-bold bg-gray-200 dark:bg-gray-600 text-gray-600 dark:text-gray-300 px-2 py-1 rounded-full whitespace-nowrap flex-shrink-0">Fixa</span>}
                                 <button
                                     onClick={() => handleDeleteGoalWithConfirmation(goal)}
                                     className="flex-shrink-0 p-1.5 sm:p-2 text-gray-400 hover:text-red-500 rounded-full opacity-0 group-hover:opacity-100 transition-opacity active:scale-90"

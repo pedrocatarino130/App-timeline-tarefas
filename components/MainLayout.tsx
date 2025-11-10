@@ -16,7 +16,7 @@ interface MainLayoutProps {
   onSendReminder: (reminder: Omit<Reminder, 'id' | 'timestamp' | 'status'>) => void;
   onDeleteReminder: (reminderId: string) => void;
   onToggleReminderStatus: (reminderId: string) => void;
-  onAddGoal: (description: string, type: GoalType) => void;
+  onAddGoal: (description: string, type: GoalType, audioUrl?: string) => void;
   onToggleGoalCompletion: (goalId: string) => void;
   onDeleteGoal: (goalId: string) => void;
   onReplyWithTask: (reminderId: string, taskDescription: string) => void;

@@ -216,11 +216,12 @@ function App() {
   }, [reminders]);
 
   // Goals
-  const handleAddGoal = useCallback(async (description: string, type: GoalType) => {
+  const handleAddGoal = useCallback(async (description: string, type: GoalType, audioUrl?: string) => {
     const newGoal: Omit<Goal, 'id'> = {
       description,
       type,
       createdAt: new Date(),
+      audioUrl,
       author: userRole || undefined,
     };
 
